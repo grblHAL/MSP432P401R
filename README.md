@@ -2,7 +2,7 @@
 
 A GrblHAL driver for the MSP432P401R ARM processors.
 
-See the Wiki-page for [compiling grblHAL](https://github.com/terjeio/grblHAL/wiki/Compiling-GrblHAL) for instructions for how to import the project, configure the driver and compile.
+See the Wiki-page for [compiling grblHAL](https://github.com/grblHAL/core/wiki/Compiling-GrblHAL) for instructions for how to import the project, configure the driver and compile.
 
 Available driver options can be found [here](./my_machine.h).
 
@@ -27,4 +27,4 @@ Currently I am using this driver to control a mini mill/router that is mainly in
 I am also working on a mini lathe conversion which uses this driver, code is in place to support my [Grbl DRO \& MPG project](https://github.com/terjeio/GRBL_MPG_DRO_BoosterPack). I have successfully run tests for threading with [G33](http://linuxcnc.org/docs/2.6/html/gcode/gcode.html#sec:G33-Spindle-Sync) so it seems that should be within reach - however, I have to complete my conversion before that part of the driver is going to be finished. If I can sucessfully implement G33 I intend to add support for the [G76](http://linuxcnc.org/docs/2.6/html/gcode/gcode.html#sec:G76-Threading-Canned) canned cycle.
 
 ---
-2020-08-23
+2021-04-14
