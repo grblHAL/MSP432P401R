@@ -111,39 +111,7 @@ static probeflags_t psettings =
     0 //.enable_protection = On
 };
 
-#if STEP_OUTMODE == GPIO_MAP
-
-    static const uint8_t c_step_outmap[8] = {
-        0,
-        X_STEP_BIT,
-        Y_STEP_BIT,
-        X_STEP_BIT|Y_STEP_BIT,
-        Z_STEP_BIT,
-        X_STEP_BIT|Z_STEP_BIT,
-        Y_STEP_BIT|Z_STEP_BIT,
-        X_STEP_BIT|Y_STEP_BIT|Z_STEP_BIT
-    };
-
-    static uint8_t step_outmap[8];
-
-#endif
-
-#if DIRECTION_OUTMODE == GPIO_MAP
-
-    static const uint8_t c_dir_outmap[8] = {
-        0,
-        X_DIRECTION_BIT,
-        Y_DIRECTION_BIT,
-        X_DIRECTION_BIT|Y_DIRECTION_BIT,
-        Z_DIRECTION_BIT,
-        X_DIRECTION_BIT|Z_DIRECTION_BIT,
-        Y_DIRECTION_BIT|Z_DIRECTION_BIT,
-        X_DIRECTION_BIT|Y_DIRECTION_BIT|Z_DIRECTION_BIT
-    };
-
-    static uint8_t dir_outmap[8];
-
-#endif
+#include "grbl/stepdir_map.h"
 
 static void stepperPulseStartSynchronized (stepper_t *stepper);
 static void spindleDataReset (void);
@@ -971,8 +939,6 @@ uint32_t getElapsedTicks (void)
 // Configure perhipherals when settings are initialized or changed
 void settings_changed (settings_t *settings)
 {
-    uint_fast8_t idx;
-
 #ifndef VFD_SPINDLE
 
     if((hal.driver_cap.variable_spindle = settings->spindle.rpm_min < settings->spindle.rpm_max)) {
@@ -1025,14 +991,8 @@ void settings_changed (settings_t *settings)
     if(!hal.spindle.get_data)
         BITBAND_PERI(RPM_INDEX_PORT->IE, RPM_INDEX_PIN) = 0;
 
-#if STEP_OUTMODE == GPIO_MAP
-    for(idx = 0; idx < sizeof(step_outmap); idx++)
-        step_outmap[idx] = c_step_outmap[idx ^ settings->steppers.step_invert.mask];
-#endif
-
-#if DIRECTION_OUTMODE == GPIO_MAP
-    for(idx = 0; idx < sizeof(dir_outmap); idx++)
-        dir_outmap[idx] = c_dir_outmap[idx ^ settings->steppers.dir_invert.mask];
+#if USE_STEPDIR_MAP
+    stepdirmap_init(settings);
 #endif
 
     if(IOInitDone) {
@@ -1420,7 +1380,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "210423";
+    hal.driver_version = "210531";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
