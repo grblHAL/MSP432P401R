@@ -30,6 +30,7 @@
 
 #include "grbl/limits.h"
 #include "grbl/spindle_sync.h"
+#include "grbl/state_machine.h"
 
 #if I2C_ENABLE
 #include "i2c.h"
@@ -60,6 +61,10 @@ static bool IOInitDone = false;
 // Inverts the probe pin state depending on user settings and probing cycle mode.
 static uint16_t pulse_length;
 static volatile uint32_t elapsed_tics = 0;
+static const io_stream_t *serial_stream;
+#if MPG_MODE_ENABLE
+static const io_stream_t *mpg_stream;
+#endif
 static axes_signals_t next_step_outbits;
 static spindle_data_t spindle_data;
 static spindle_encoder_t spindle_encoder = {
@@ -96,10 +101,6 @@ static spindle_control_t spindle_control = { .pid_state = PIDState_Disabled, .pi
 static void spindle_set_speed (uint_fast16_t pwm_value);
 #else
 #undef SPINDLE_RPM_CONTROLLED
-#endif
-
-#if MODBUS_ENABLE
-static modbus_stream_t modbus_stream = {0};
 #endif
 
 static probe_state_t probe = {
@@ -881,24 +882,27 @@ static void modeSelect (bool mpg_mode)
     BITBAND_PERI(MODE_PORT->IFG, MODE_SWITCH_PIN) = 0;
     BITBAND_PERI(MODE_PORT->IE, MODE_SWITCH_PIN) = 1;
 
+    sys_state_t state = state_get();
+
     // Deny entering MPG mode if busy
-    if(mpg_mode == sys.mpg_mode || (mpg_mode && (gc_state.file_run || !(sys.state == STATE_IDLE || (sys.state & (STATE_ALARM|STATE_ESTOP)))))) {
+    if(mpg_mode == sys.mpg_mode || (mpg_mode && (gc_state.file_run || !(state == STATE_IDLE || (state & (STATE_ALARM|STATE_ESTOP)))))) {
         hal.stream.enqueue_realtime_command(CMD_STATUS_REPORT_ALL);
         return;
     }
 
-    serialSelect(mpg_mode);
-
     if(mpg_mode) {
-        hal.stream.read = serial2GetC;
-        hal.stream.get_rx_buffer_available = serial2RxFree;
-        hal.stream.cancel_read_buffer = serial2RxCancel;
-        hal.stream.reset_read_buffer = serial2RxFlush;
+        hal.stream.disable(true);
+        mpg_stream->disable(false);
+        hal.stream.read = mpg_stream->read;
+        hal.stream.get_rx_buffer_free = mpg_stream->get_rx_buffer_free;
+        hal.stream.cancel_read_buffer = mpg_stream->cancel_read_buffer;
+        hal.stream.reset_read_buffer = mpg_stream->reset_read_buffer;
     } else {
-        hal.stream.read = serialGetC;
-        hal.stream.get_rx_buffer_available = serialRxFree;
-        hal.stream.cancel_read_buffer = serialRxCancel;
-        hal.stream.reset_read_buffer = serialRxFlush;
+        mpg_stream->disable(true);
+        enqueue_realtime_command_ptr enqrt = hal.stream.enqueue_realtime_command;
+        memcpy(&hal.stream, serial_stream, sizeof(io_stream_t));
+        hal.stream.enqueue_realtime_command = enqrt;
+        hal.stream.disable(false);
     }
 
     hal.stream.reset_read_buffer();
@@ -1380,7 +1384,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "210531";
+    hal.driver_version = "210626";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1419,14 +1423,11 @@ bool driver_init (void)
 
     hal.control.get_state = systemGetState;
 
-    hal.stream.read = serialGetC;
-    hal.stream.get_rx_buffer_available = serialRxFree;
-    hal.stream.reset_read_buffer = serialRxFlush;
-    hal.stream.cancel_read_buffer = serialRxCancel;
-    hal.stream.write = serialWriteS;
-    hal.stream.write_all = serialWriteS;
-    hal.stream.write_char = serialPutC;
-    hal.stream.suspend_read = serialSuspendInput;
+    enqueue_realtime_command_ptr enqrt = hal.stream.enqueue_realtime_command;
+
+    memcpy(&hal.stream, (serial_stream = serialInit()), sizeof(io_stream_t));
+
+    hal.stream.enqueue_realtime_command = enqrt;
 
     hal.irq_enable = enable_irq;
     hal.irq_disable = disable_irq;
@@ -1434,8 +1435,6 @@ bool driver_init (void)
     hal.clear_bits_atomic = bitsClearAtomic;
     hal.set_value_atomic = valueSetAtomic;
     hal.get_elapsed_ticks = getElapsedTicks;
-
-    serialInit();
 
 #if I2C_ENABLE
     i2c_init();
@@ -1483,7 +1482,7 @@ bool driver_init (void)
     hal.driver_cap.probe_pull_up = On;
 #if MPG_MODE_ENABLE
     hal.driver_cap.mpg_mode = On;
-    serial2Init(19200);
+    mpg_stream = serial2Init(19200);
 #endif
 
 #if TRINAMIC_ENABLE
@@ -1494,23 +1493,8 @@ bool driver_init (void)
     keypad_init();
 #endif
 
-#if MODBUS_ENABLE
-
-    modbus_stream.write = serial2Write;
-    modbus_stream.read = serial2GetC;
-    modbus_stream.flush_rx_buffer = serial2RxFlush;
-    modbus_stream.flush_tx_buffer = serial2TxFlush;
-    modbus_stream.get_rx_buffer_count = serial2RxCount;
-    modbus_stream.get_tx_buffer_count = serial2TxCount;
-    modbus_stream.set_baud_rate = serial2SetBaudRate;
-
-    bool modbus = modbus_init(&modbus_stream);
-
 #if SPINDLE_HUANYANG > 0
-    if(modbus)
-        huanyang_init(&modbus_stream);
-#endif
-
+    huanyang_init(modbus_init(serial2Init(115200), NULL));
 #endif
 
 #if PLASMA_ENABLE

@@ -70,30 +70,9 @@
 
 //
 
-void serialInit(void);
-int16_t serialGetC(void);
-bool serialPutC(const char c);
-void serialWriteS(const char *s);
-void serialWriteLn(const char *s);
-void serialWrite(const char *s, uint16_t length);
-bool serialSuspendInput (bool suspend);
-
-uint16_t serialTxCount(void);
-uint16_t serialRxCount(void);
-uint16_t serialRxFree(void);
-void serialRxFlush(void);
-void serialRxCancel(void);
-
+const io_stream_t *serialInit(void);
 #ifdef SERIAL2_MOD
-void serial2Init(uint32_t baud_rate);
-bool serial2SetBaudRate (uint32_t baud_rate);
-uint16_t serial2RxFree (void);
-void serial2RxFlush (void);
-void serial2RxCancel (void);
-uint16_t serial2RxCount (void);
-uint16_t serial2TxCount (void);
-void serial2TxFlush (void);
-void serial2Write(const char *s, uint16_t length);
-int16_t serial2GetC (void);
-void serialSelect (bool mpg);
+const io_stream_t *serial2Init(uint32_t baud_rate);
 #endif
+
+/*EOF*/

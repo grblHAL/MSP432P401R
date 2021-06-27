@@ -43,55 +43,20 @@
 #include "my_machine.h"
 #endif
 
+#include "grbl/driver_opts.h"
+
 #define NO_MSP_CLASSIC_DEFINES
 
 // Configuration
 
-#ifndef PLASMA_ENABLE
-#define PLASMA_ENABLE           0
-#endif
-#ifndef SPINDLE_HUANYANG
-#define SPINDLE_HUANYANG        0
-#endif
-#ifndef KEYPAD_ENABLE
-#define KEYPAD_ENABLE           0
-#endif
-#ifndef EEPROM_ENABLE
-#define EEPROM_ENABLE           0
-#endif
-#ifndef EEPROM_IS_FRAM
-#define EEPROM_IS_FRAM          0
-#endif
-#ifndef TRINAMIC_ENABLE
-#define TRINAMIC_ENABLE         0
-#endif
-#ifndef TRINAMIC_I2C
-#define TRINAMIC_I2C            0
-#endif
-#ifndef TRINAMIC_DEV
-#define TRINAMIC_DEV            0
-#endif
 #ifndef CNC_BOOSTERPACK_SHORTS
 #define CNC_BOOSTERPACK_SHORTS  0
 #endif
 #ifndef CNC_BOOSTERPACK_A4998
 #define CNC_BOOSTERPACK_A4998   0
 #endif
-#ifndef LIMITS_OVERRIDE_ENABLE
-#define LIMITS_OVERRIDE_ENABLE  0
-#endif
 
 #define CNC_BOOSTERPACK         0
-
-#ifndef ESTOP_ENABLE
-  #if COMPATIBILITY_LEVEL <= 1
-    #define ESTOP_ENABLE    1
-  #else
-    #define ESTOP_ENABLE    0
-  #endif
-#elif ESTOP_ENABLE && COMPATIBILITY_LEVEL > 1
-  #warning "Enabling ESTOP may not work with all senders!"
-#endif
 
 // Define GPIO I/O mode options
 
