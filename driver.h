@@ -183,15 +183,47 @@
 #define RPM_TIMER     timer32(RPM_TIM)
 #define RPM_TIMER_INT timer32INT(RPM_TIM)
 
-#define RPM_INDEX_PN    6
-#define RPM_INDEX_PORT  port(RPM_INDEX_PN)
-#define RPM_INDEX_PIN   3
-#define RPM_INDEX_BIT   (1<<RPM_INDEX_PIN)
-#define RPM_INDEX_INT   portINT(RPM_INDEX_PN)
+#define RPM_INDEX_PORT  port(C)
+#define RPM_INDEX_PIN   11
+
+typedef struct {
+    pin_function_t id;
+    DIO_PORT_Interruptable_Type *port;
+    uint8_t pin;
+    uint16_t bit;
+    pin_group_t group;
+    volatile bool active;
+    volatile bool debounce;
+    pin_irq_mode_t irq_mode;
+    pin_mode_t cap;
+    ioport_interrupt_callback_ptr interrupt_callback;
+    const char *description;
+} input_signal_t;
+
+typedef struct {
+    pin_function_t id;
+    DIO_PORT_Interruptable_Type *port;
+    uint8_t pin;
+    pin_group_t group;
+    const char *description;
+} output_signal_t;
+
+typedef struct {
+    uint8_t n_pins;
+    union {
+        input_signal_t *inputs;
+        output_signal_t *outputs;
+    } pins;
+} pin_group_pins_t;
 
 // Driver initialization entry point
 
 bool driver_init (void);
 uint32_t xTaskGetTickCount();
+
+#ifdef HAS_IOPORTS
+void ioports_init(pin_group_pins_t *aux_inputs, pin_group_pins_t *aux_outputs);
+void ioports_event (input_signal_t *input);
+#endif
 
 #endif // __DRIVER_H__

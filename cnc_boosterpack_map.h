@@ -50,13 +50,14 @@
 #define CNC_BOOSTERPACK  1 // Do not change!
 #define EEPROM_ENABLE    1 // Only change if BoosterPack does not have EEPROM mounted
 
+#define HAS_IOPORTS
+
 // Define step pulse output pins. NOTE: All step bit pins must be on the same port.
 
-#define STEP_PN    4
-#define STEP_PORT  port(STEP_PN)
-#define X_STEP_PIN 0
-#define Y_STEP_PIN 2
-#define Z_STEP_PIN 4
+#define STEP_PORT  port(B)
+#define X_STEP_PIN 8
+#define Y_STEP_PIN 10
+#define Z_STEP_PIN 12
 #define X_STEP_BIT (1<<X_STEP_PIN)
 #define Y_STEP_BIT (1<<Y_STEP_PIN)
 #define Z_STEP_BIT (1<<Z_STEP_PIN)
@@ -67,8 +68,7 @@
 
 // Define step direction output pins. NOTE: All direction pins must be on the same port.
 
-#define DIRECTION_PN    1
-#define DIRECTION_PORT  port(DIRECTION_PN)
+#define DIRECTION_PORT  port(A)
 #define X_DIRECTION_PIN 6
 #define Y_DIRECTION_PIN 7
 #define Z_DIRECTION_PIN 5
@@ -81,38 +81,25 @@
 
 // Define stepper driver enable/disable output pin.
 
-#define STEPPERS_DISABLE_Z_PORT P5
-#define STEPPERS_DISABLE_Z_PIN  7
-#define STEPPERS_DISABLE_Z_BIT (1<<STEPPERS_DISABLE_Z_PIN)
+#define Z_ENABLE_PORT port(C)
+#define Z_ENABLE_PIN  7
+#define XY_ENABLE_PORT port(B)
+#define XY_ENABLE_PIN  13
 
-#define STEPPERS_DISABLE_XY_PORT P4
-#define STEPPERS_DISABLE_X_PIN   5
-#define STEPPERS_DISABLE_Y_PIN   5
-#define STEPPERS_DISABLE_X_BIT   (1<<STEPPERS_DISABLE_X_PIN)
-#define STEPPERS_DISABLE_Y_BIT   (1<<STEPPERS_DISABLE_Y_PIN)
-
-// Trinamic drivers in I2C mode uses STEPPERS_DISABLE_XY_PIN as interrupt input for DIAG1 signal
+// Trinamic drivers in I2C mode uses XY_ENABLE_PIN as interrupt input for DIAG1 signal
 #if TRINAMIC_ENABLE == 2130 && TRINAMIC_I2C
-#define TRINAMIC_DIAG_IRQ_PN     4
-#define TRINAMIC_DIAG_IRQ_PORT   port(TRINAMIC_DIAG_IRQ_PN)
-#define TRINAMIC_DIAG_IRQ_PIN    5
-#define TRINAMIC_DIAG_IRQ_BIT    (1<<TRINAMIC_DIAG_IRQ_PIN)
-#define TRINAMIC_DIAG_INT        portINT(TRINAMIC_DIAG_IRQ_PN)
-#define TRINAMIC_DIAG_IRQHandler portHANDLER(TRINAMIC_DIAG_IRQ_PN)
-#define TRINAMIC_WARN_IRQ_PN     5
-#define TRINAMIC_WARN_IRQ_PORT   port(TRINAMIC_WARN_IRQ_PN)
+#define TRINAMIC_DIAG_IRQ_PORT   port(B)
+#define TRINAMIC_DIAG_IRQ_PIN    13
+#define TRINAMIC_WARN_IRQ_PORT   port(C)
 #define TRINAMIC_WARN_IRQ_PIN    7
-#define TRINAMIC_WARN_IRQ_BIT    (1<<TRINAMIC_WARN_IRQ_PIN)
-#define TRINAMIC_WARN_INT        portINT(TRINAMIC_WARN_IRQ_PN)
-#define TRINAMIC_WARN_IRQHandler portHANDLER(TRINAMIC_WARN_IRQ_PN)
 #endif
 
 #if CNC_BOOSTERPACK_A4998
 
 // Stepper driver VDD/VIO supply
 
-#define STEPPERS_VDD_PORT P4
-#define STEPPERS_VDD_PIN  3
+#define STEPPERS_VDD_PORT port(B)
+#define STEPPERS_VDD_PIN  11
 #define STEPPERS_VDD_BIT  (1<<STEPPERS_VDD_PIN)
 
 #endif
@@ -139,118 +126,76 @@
 
 #else
 
-#define LIMIT_PN_X      3
-#define LIMIT_PORT_X    port(LIMIT_PN_X)
-#define LIMIT_GPIO_X    portGpio(LIMIT_PN_X)
-#define LIMIT_INT_X     portINT(LIMIT_PN_X)
-#define LIMIT_X_IRQHandler portHANDLER(LIMIT_PN_X)
-
-#define LIMIT_PN_YZ     2
-#define LIMIT_PORT_Y    port(LIMIT_PN_YZ)
-#define LIMIT_PORT_Z    port(LIMIT_PN_YZ)
-#define LIMIT_GPIO_YZ   portGpio(LIMIT_PN_YZ)
-#define LIMIT_INT_YZ    portINT(LIMIT_PN_YZ)
-#define LIMIT_YZ_RST_IRQHandler portHANDLER(LIMIT_PN_YZ)
-
+#define LIMIT_PORT_X    port(B)
+#define LIMIT_PORT_Y    port(A)
+#define LIMIT_PORT_Z    port(A)
 #define X_LIMIT_PIN 0
-#define Y_LIMIT_PIN 6
-#define Z_LIMIT_PIN 7
+#define Y_LIMIT_PIN 14
+#define Z_LIMIT_PIN 15
 #define X_LIMIT_BIT (1<<X_LIMIT_PIN)
 #define Y_LIMIT_BIT (1<<Y_LIMIT_PIN)
 #define Z_LIMIT_BIT (1<<Z_LIMIT_PIN)
 #define LIMIT_INMODE GPIO_BITBAND
-//#define LIMIT_SHIFT GPIO_SHIFT4 // Uncomment and set shift value if pins are consecutive and ordered
-#define LIMIT_MASK_X  (X_LIMIT_BIT) // All limit bits
-#define LIMIT_MASK_YZ  (Y_LIMIT_BIT|Z_LIMIT_BIT) // All limit bits
 
 #endif
 
 // Define flood and mist coolant output pins.
 
-#define COOLANT_FLOOD_PORT  P5
+#define COOLANT_FLOOD_PORT  port(C)
 #define COOLANT_FLOOD_PIN   1
-#define COOLANT_FLOOD_BIT   (1<<COOLANT_FLOOD_PIN)
-#define COOLANT_MIST_PORT   P3
+#define COOLANT_MIST_PORT   port(B)
 #define COOLANT_MIST_PIN    5
-#define COOLANT_MIST_BIT    (1<<COOLANT_MIST_PIN)
 
 // Define user-control controls (cycle start, reset, feed hold) input pins.
 
 #if CNC_BOOSTERPACK_SHORTS
 
-#define CONTROL_PN          6
-#define CONTROL_PORT        port(CONTROL_PN)
-#define CONTROL_GPIO        portGpio(CONTROL_PN)
-#define CONTROL_INT         portINT(CONTROL_PN)
-#define CONTROL_IRQHandler  portHANDLER(CONTROL_PN)
-
-#define RESET_PIN           0
-#define FEED_HOLD_PIN       6
-#define CYCLE_START_PIN     7
-#define SAFETY_DOOR_PIN     1
-#define RESET_BIT           (1<<RESET_PIN)
-#define FEED_HOLD_BIT       (1<<FEED_HOLD_PIN)
-#define CYCLE_START_BIT     (1<<CYCLE_START_PIN)
-#define SAFETY_DOOR_BIT     (1<<SAFETY_DOOR_PIN)
-#define CONTROL_MASK        (RESET_BIT|FEED_HOLD_BIT|CYCLE_START_BIT|SAFETY_DOOR_BIT)
-//#define CONTROL_SHIFT       GPIO_SHIFT0 // Uncomment and set shift value if pins are consecutive and ordered
-//#define CONTROL_INMODE      GPIO_BITBAND
+#define RESET_PORT          port(C)
+#define RESET_PIN           15
+#define CYCLE_START_PORT    port(C)
+#define CYCLE_START_PIN     8
+#define FEED_HOLD_PORT      port(C)
+#define FEED_HOLD_PIN       14
+#ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+#define SAFETY_DOOR_PORT    port(C)
+#define SAFETY_DOOR_PIN     9
+#endif
 
 #else
 
-#define CONTROL_PN_RST      2
-#define CONTROL_PN_FH       6
-#define CONTROL_PN_CS       6
-#define CONTROL_PN_SD       5
-#define CONTROL_PORT_CS     port(CONTROL_PN_CS)
-#define CONTROL_PORT_FH     port(CONTROL_PN_FH)
-#define CONTROL_PORT_SD     port(CONTROL_PN_SD)
-#define CONTROL_PORT_RST    port(CONTROL_PN_RST)
-#define CONTROL_GPIO_CS     portGpio(CONTROL_PN_CS)
-#define CONTROL_GPIO_FH     portGpio(CONTROL_PN_FH)
-#define CONTROL_GPIO_SD_RST portGpio(CONTROL_PN_SD)
-#define CONTROL_INT_SD_RST  portINT(CONTROL_PN_SD)
-#define CONTROL_INT_FH      portINT(CONTROL_PN_FH)
-#define CONTROL_FH_CS_IRQHandler portHANDLER(CONTROL_PN_FH)
-#define CONTROL_SD_MODE_Handler portHANDLER(CONTROL_PN_SD)
+#define RESET_PORT          port(A)
+#define RESET_PIN           12
+#define CYCLE_START_PORT    port(C)
+#define CYCLE_START_PIN     15
+#define FEED_HOLD_PORT      port(C)
+#define FEED_HOLD_PIN       14
 
-#define RESET_PIN           4
-#define FEED_HOLD_PIN       6
-#define CYCLE_START_PIN     7
+#ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+#define SAFETY_DOOR_PORT    port(C)
 #define SAFETY_DOOR_PIN     6
-#define RESET_BIT           (1<<RESET_PIN)
-#define FEED_HOLD_BIT       (1<<FEED_HOLD_PIN)
-#define CYCLE_START_BIT     (1<<CYCLE_START_PIN)
-#define SAFETY_DOOR_BIT     (1<<SAFETY_DOOR_PIN)
-//#define CONTROL_MASK        (RESET_BIT|FEED_HOLD_BIT|CYCLE_START_BIT|SAFETY_DOOR_BIT)
-//#define CONTROL_SHIFT       GPIO_SHIFT0 // Uncomment and set shift value if pins are consecutive and ordered
+#endif
+
 #define CONTROL_INMODE GPIO_BITBAND
 
 #endif
 
 // Define probe switch input pin.
 
-#define PROBE_PN            4
-#define PROBE_PORT          port(PROBE_PN)
+#define PROBE_PORT          port(B)
 #define PROBE_GPIO          portGpio(PROBE_PN)
-#define PROBE_PIN           6
-#define PROBE_BIT           (1<<PROBE_PIN)
-#define PROBE_INT           portINT(PROBE_PN)
-#define PROBE_IRQHandler    portHANDLER(PROBE_PN)
+#define PROBE_PIN           14
 
 // Define spindle enable, spindle direction and PWM output pins.
 
-#define SPINDLE_ENABLE_PORT   P4
-#define SPINDLE_ENABLE_PIN    7
-#define SPINDLE_ENABLE_BIT    (1<<SPINDLE_ENABLE_PIN)
+#define SPINDLE_ENABLE_PORT     port(B)
+#define SPINDLE_ENABLE_PIN      15
 
-#define SPINDLE_DIRECTION_PORT  P5
+#define SPINDLE_DIRECTION_PORT  port(C)
 #define SPINDLE_DIRECTION_PIN   4
-#define SPINDLE_DIRECTION_BIT   (1<<SPINDLE_DIRECTION_PIN)
 
-#define SPINDLE_PWM_PORT  P2
-#define SPINDLE_PWM_PIN   5
-#define SPINDLE_PWM_BIT   (1<<SPINDLE_PWM_PIN)
+#define SPINDLE_PWM_PORT        P2
+#define SPINDLE_PWM_PIN         5
+#define SPINDLE_PWM_BIT         (1<<SPINDLE_PWM_PIN)
 
 #define SPINDLE_PID_SAMPLE_RATE 5 // ms
 
@@ -258,23 +203,15 @@
  * CNC Boosterpack GPIO assignments
  */
 
-#define GPIO0_PN             3
-#define GPIO0_PORT           port(GPIO0_PN)
-#define GPIO0_GPIO           portGpio(GPIO0_PN)
-#define GPIO0_INT            portINT(GPIO0_PN)
-#define GPIO0_PIN            7
-#define GPIO0_BIT            (1<<GPIO0_PIN)
+#define AUXOUTPUT0_PORT     port(B)
+#define AUXOUTPUT0_PIN      7
 
-#define GPIO1_PN             5
-#define GPIO1_PORT           port(GPIO1_PN)
-#define GPIO1_GPIO           portGpio(GPIO1_PN)
-#define GPIO1_INT            portINT(GPIO1_PN)
-#define GPIO1_PIN            0
-#define GPIO1_BIT            (1<<GPIO1_PIN)
+#define AUXOUTPUT1_PORT     port(C)
+#define AUXOUTPUT1_PIN      0
 
 // Normally used as MPG mode input
 #define GPIO2_PN             5
-#define GPIO2_PORT           port(GPIO2_PN)
+#define GPIO2_PORT           port(C)
 #define GPIO2_GPIO           portGpio(GPIO2_PN)
 #define GPIO2_INT            portINT(GPIO2_PN)
 #define GPIO2_PIN            2
@@ -288,22 +225,6 @@
 #define GPIO3_PIN            6
 #define GPIO3_BIT            (1<<GPIO3_PIN)
 
-// GPIO4 is shared with UART2 RX
-#define GPIO4_PN             3
-#define GPIO4_PORT           port(GPIO4_PN)
-#define GPIO4_GPIO           portGpio(GPIO4_PN)
-#define GPIO4_INT            portINT(GPIO4_PN)
-#define GPIO4_PIN            2
-#define GPIO4_BIT            (1<<GPIO4_PIN)
-
-// GPIO5 is shared with UART2 TX
-#define GPIO5_PN             3
-#define GPIO5_PORT           port(GPIO5_PN)
-#define GPIO5_GPIO           portGpio(GPIO5_PN)
-#define GPIO5_INT            portINT(GPIO5_PN)
-#define GPIO5_PIN            3
-#define GPIO5_BIT            (1<<GPIO5_PIN)
-
 // Normally used as keypad strobe input
 #define GPIO6_PN             4
 #define GPIO6_PORT           port(GPIO6_PN)
@@ -312,34 +233,31 @@
 #define GPIO6_PIN            1
 #define GPIO6_BIT            (1<<GPIO6_PIN)
 
-// Define limit switches override input
+#if !(MPG_MODE_ENABLE || MODBUS_ENABLE)
+#define AUXINPUT0_PORT     port(B)
+#define AUXINPUT0_PIN      2 // GPIO4
 
-#if LIMITS_OVERRIDE_ENABLE
-#define LIMITS_OVERRIDE_PORT        GPIO3_PORT
-#define LIMITS_OVERRIDE_GPIO        GPIO3_GPIO
-#define LIMITS_OVERRIDE_SWITCH_PIN  GPIO3_PIN
-#define LIMITS_OVERRIDE_SWITCH_BIT  GPIO3_BIT
+#define AUXINPUT1_PORT     port(B)
+#define AUXINPUT1_PIN      3 // GPIO5
 #endif
 
 // Define MPG mode input (for selecting secondary UART input)
 
-#if MPG_MODE_ENABLE
-#define MODE_PORT           GPIO2_PORT
-#define MODE_GPIO           GPIO2_GPIO
-#define MODE_INT            GPIO2_INT
-#define MODE_SWITCH_PIN     GPIO2_PIN
-#define MODE_SWITCH_BIT     GPIO2_BIT
-#define MODE_IRQHandler     portHANDLER(GPIO2_PN)
+#if MPG_MODE_ENABLE // GPIO2
+#define MODE_PORT           port(C)
+#define MODE_SWITCH_PIN     2
 #endif
 
-#if KEYPAD_ENABLE
-#define KEYPAD_PN           GPIO6_PN
-#define KEYPAD_PORT         port(KEYPAD_PN)
-#define KEYPAD_GPIO         portGpio(KEYPAD_PN)
-#define KEYPAD_INT          portINT(KEYPAD_PN)
-#define KEYPAD_IRQ_PIN      GPIO6_PIN
-#define KEYPAD_IRQ_BIT      GPIO6_BIT
-#define KEYPAD_IRQHandler   portHANDLER(KEYPAD_PN)
+// Define limit switches override input
+
+#if LIMITS_OVERRIDE_ENABLE // GPIO3
+#define LIMITS_OVERRIDE_PORT    port(B)
+#define LIMITS_OVERRIDE_PIN     6
+#endif
+
+#if KEYPAD_ENABLE // GPIO6
+#define KEYPAD_PORT         port(B)
+#define KEYPAD_IRQ_PIN      9
 #endif
 
 #define I2C_PN          B1
