@@ -30,10 +30,12 @@
 
 static stream_tx_buffer_t txbuffer = {0};
 static stream_rx_buffer_t rxbuffer = {0};
+static enqueue_realtime_command_ptr enqueue_realtime_command = protocol_enqueue_realtime_command;
 
 #ifdef SERIAL2_MOD
 static stream_tx_buffer_t txbuffer2 = {0};
 static stream_rx_buffer_t rxbuffer2 = {0};
+static enqueue_realtime_command_ptr enqueue_realtime_command2 = protocol_enqueue_realtime_command;
 #endif
 
 #ifdef RTS_PORT
@@ -210,6 +212,16 @@ static bool serialDisable (bool disable)
     return true;
 }
 
+static enqueue_realtime_command_ptr serialSetRtHandler (enqueue_realtime_command_ptr handler)
+{
+    enqueue_realtime_command_ptr prev = enqueue_realtime_command;
+
+    if(handler)
+        enqueue_realtime_command = handler;
+
+    return prev;
+}
+
 const io_stream_t *serialInit (void)
 {
     static const io_stream_t stream = {
@@ -223,7 +235,8 @@ const io_stream_t *serialInit (void)
         .reset_read_buffer = serialRxFlush,
         .cancel_read_buffer = serialRxCancel,
         .suspend_read = serialSuspendInput,
-        .disable = serialDisable
+        .disable = serialDisable,
+        .set_enqueue_rt_handler = serialSetRtHandler
     };
 
     SERIAL_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
@@ -265,14 +278,9 @@ void SERIAL_IRQHandler (void)
             break;
 
         case 0x02:;
-            uint16_t data = SERIAL_MODULE->RXBUF;           // Read character received
-            if(data == CMD_TOOL_ACK && !rxbuffer.backup) {
-                stream_rx_backup(&rxbuffer);
-                hal.stream.read = serialGetC; // restore normal input
-            } else if(!hal.stream.enqueue_realtime_command((char)data)) {
-
+            uint16_t data = SERIAL_MODULE->RXBUF;                   // Read character received
+            if(!enqueue_realtime_command((char)data)) {             // Enqueued as real-time command?
                 bptr = (rxbuffer.head + 1) & (RX_BUFFER_SIZE - 1);  // Get next head pointer
-
                 if(bptr == rxbuffer.tail)                           // If buffer full
                     rxbuffer.overflow = 1;                          // flag overflow,
                 else {
@@ -454,6 +462,16 @@ static bool serial2Disable (bool disable)
     return true;
 }
 
+static enqueue_realtime_command_ptr serial2SetRtHandler (enqueue_realtime_command_ptr handler)
+{
+    enqueue_realtime_command_ptr prev = enqueue_realtime_command2;
+
+    if(handler)
+        enqueue_realtime_command2 = handler;
+
+    return prev;
+}
+
 const io_stream_t *serial2Init (uint32_t baud_rate)
 {
     static const io_stream_t stream = {
@@ -472,7 +490,8 @@ const io_stream_t *serial2Init (uint32_t baud_rate)
         .cancel_read_buffer = serial2RxCancel,
     //    .suspend_read = serial2SuspendInput,
         .set_baud_rate = serial2SetBaudRate,
-        .disable = serial2Disable
+        .disable = serial2Disable,
+        .set_enqueue_rt_handler = serial2SetRtHandler
     };
 
     SERIAL2_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
@@ -521,17 +540,15 @@ void SERIAL2_IRQHandler (void)
             break;
 
         case 0x02:
-            data = SERIAL2_MODULE->RXBUF;                       // Read character received
-            bptr = (rxbuffer2.head + 1) & (RX_BUFFER_SIZE - 1); // Temp head position (to avoid volatile overhead)
-            if(bptr == rxbuffer2.tail) {                        // If buffer full
-                rxbuffer2.overflow = 1;                         // flag overflow
-#if MODBUS_ENABLE
-            } else {
-#else
-            } else if(!hal.stream.enqueue_realtime_command((char)data)) {
-#endif
-                rxbuffer2.data[rxbuffer2.head] = data;          // Add data to buffer
-                rxbuffer2.head = bptr;                          // and update pointer
+            data = SERIAL2_MODULE->RXBUF;                           // Read character received
+            if(!enqueue_realtime_command2((char)data)) {            // Enqueued as real-time command?
+                bptr = (rxbuffer2.head + 1) & (RX_BUFFER_SIZE - 1); // Temp head position (to avoid volatile overhead)
+                if(bptr == rxbuffer2.tail)                          // If buffer full
+                    rxbuffer2.overflow = 1;                         // flag overflow
+                else {
+                    rxbuffer2.data[rxbuffer2.head] = data;          // else data to buffer
+                    rxbuffer2.head = bptr;                          // and update pointer
+                }
             }
             break;
     }

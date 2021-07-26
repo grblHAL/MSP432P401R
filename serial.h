@@ -25,7 +25,7 @@
 #include <stdbool.h>
 
 #include "driver.h"
-#include "grbl/grbl.h"
+#include "grbl/protocol.h"
 
 #define BACKCHANNEL // comment out to use Launchpad Backchannel UART
 

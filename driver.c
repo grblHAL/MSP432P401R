@@ -185,7 +185,6 @@ static bool IOInitDone = false;
 // Inverts the probe pin state depending on user settings and probing cycle mode.
 static uint16_t pulse_length;
 static volatile uint32_t elapsed_tics = 0;
-static const io_stream_t *serial_stream;
 #if MPG_MODE_ENABLE
 static const io_stream_t *mpg_stream;
 #endif
@@ -934,7 +933,7 @@ static void modeSelect (bool mpg_mode)
 
 static void modeChange (void)
 {
-    modeSelect((MODE_PORT->IN & MODE_SWITCH_BIT) == 0);
+    modeSelect(BITBAND_PERI(MODE_PORT->IN, MODE_SWITCH_PIN) == 0);
 }
 
 static void modeEnable (void)
@@ -1226,7 +1225,7 @@ void settings_changed (settings_t *settings)
          ***************************/
 
 #if MPG_MODE_ENABLE
-        if(hal.driver_cap.mpg_mode)
+        if(hal.driver_cap.mpg_mode) {
             // Enable pullup and switch to input
             BITBAND_PERI(MODE_PORT->OUT, MODE_SWITCH_PIN) = 1;
             BITBAND_PERI(MODE_PORT->REN, MODE_SWITCH_PIN) = 1;
@@ -1488,7 +1487,7 @@ bool driver_init (void)
 
     hal.control.get_state = systemGetState;
 
-    memcpy(&hal.stream, (serial_stream = serialInit()), offsetof(io_stream_t, enqueue_realtime_command));
+    memcpy(&hal.stream, serialInit(), sizeof(io_stream_t));
 
     hal.irq_enable = enable_irq;
     hal.irq_disable = disable_irq;

@@ -35,10 +35,11 @@
 //#define ODOMETER_ENABLE    1 // Odometer plugin. To be completed.
 //#define EEPROM_ENABLE      1 // I2C EEPROM support. Set to 1 for 24LC16(2K), 2 for larger sizes. Requires eeprom plugin.
 //#define EEPROM_IS_FRAM     1 // Uncomment when EEPROM is enabled and chip is FRAM, this to remove write delay.
-#define LIMITS_OVERRIDE_ENABLE 1
+//#define LIMITS_OVERRIDE_ENABLE 1
 
 //#define ESTOP_ENABLE       0 // When enabled only real-time report requests will be executed when the reset pin is asserted.
                                // Note: if left commented out the default setting is determined from COMPATIBILITY_LEVEL.
+//#define  MPG_MODE_ENABLE 1
 
 #ifdef BOARD_CNC_BOOSTERPACK
 #define CNC_BOOSTERPACK_SHORTS 0 // Shorts added to BoosterPack for some signals (for faster and simpler driver)
