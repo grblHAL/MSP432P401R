@@ -1,6 +1,6 @@
 ## MSP432P401R
 
-A GrblHAL driver for the MSP432P401R ARM processors.
+A grblHAL driver for the MSP432P401R ARM processors.
 
 See the Wiki-page for [compiling grblHAL](https://github.com/grblHAL/core/wiki/Compiling-GrblHAL) for instructions for how to import the project, configure the driver and compile.
 
@@ -16,7 +16,7 @@ The lathe support is still to be regarded as in an alpha phase, my focus will be
 
 Complemented with the Trinamic TMC2130 version of the CNC BoosterPack silent stepping is within reach for all these processors... 
 
-A GrblHAL driver for the Texas Instruments [MSP432P401R LaunchPad](http://www.ti.com/tool/MSP-EXP432P401R) \(**NOTE:** for the retired Black Edition, will soon be updated for the current Red Edition\).
+A GrblHAL driver for the Texas Instruments [MSP432P401R LaunchPad](https://www.ti.com/tool/MSP-EXP432P401R) \(**NOTE:** for the retired Black Edition, will soon be updated for the current Red Edition\).
 
 Optional support for I2C keypad added, can be used for jogging and mist/coolant overrides. Jogging can be toggled between fast, slow and step mode.
 
@@ -27,4 +27,4 @@ Currently I am using this driver to control a mini mill/router that is mainly in
 I am also working on a mini lathe conversion which uses this driver, code is in place to support my [Grbl DRO \& MPG project](https://github.com/terjeio/GRBL_MPG_DRO_BoosterPack). I have successfully run tests for threading with [G33](http://linuxcnc.org/docs/2.6/html/gcode/gcode.html#sec:G33-Spindle-Sync) so it seems that should be within reach - however, I have to complete my conversion before that part of the driver is going to be finished. If I can sucessfully implement G33 I intend to add support for the [G76](http://linuxcnc.org/docs/2.6/html/gcode/gcode.html#sec:G76-Threading-Canned) canned cycle.
 
 ---
-2021-04-14
+2021-08-11
