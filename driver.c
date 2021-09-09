@@ -32,6 +32,7 @@
 #include "grbl/spindle_sync.h"
 #include "grbl/state_machine.h"
 #include "grbl/motor_pins.h"
+#include "grbl/pin_bits_masks.h"
 
 #if I2C_ENABLE
 #include "i2c.h"
@@ -530,7 +531,7 @@ static control_signals_t systemGetState (void)
   #endif
     signals.feed_hold = BITBAND_PERI(FEED_HOLD_PORT->IN, FEED_HOLD_PIN);
     signals.cycle_start = BITBAND_PERI(CYCLE_START_PORT->IN, CYCLE_START_PIN);
-  #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+  #if SAFETY_DOOR_ENABLE
     signals.safety_door_ajar = BITBAND_PERI(SAFETY_DOOR_PORT->IN, SAFETY_DOOR_PIN);
   #endif
 
@@ -1337,9 +1338,9 @@ static bool driver_setup (settings_t *settings)
 
 #ifndef VFD_SPINDLE
 
-    SPINDLE_PWM_PORT->DIR |= SPINDLE_PWM_BIT;
-    SPINDLE_PWM_PORT->SEL1 &= ~SPINDLE_PWM_BIT;
-    SPINDLE_PWM_PORT->SEL0 |= SPINDLE_PWM_BIT;
+    SPINDLE_PWM_PORT->DIR |= (1 << SPINDLE_PWM_PIN);
+    SPINDLE_PWM_PORT->SEL1 &= ~(1 << SPINDLE_PWM_PIN);
+    SPINDLE_PWM_PORT->SEL0 |= (1 << SPINDLE_PWM_PIN);
     SPINDLE_PWM_TIMER->CTL = TIMER_A_CTL_SSEL__SMCLK;
     SPINDLE_PWM_TIMER->EX0 = 0;
 
@@ -1444,7 +1445,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "210808";
+    hal.driver_version = "210908";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1509,7 +1510,7 @@ bool driver_init (void)
 
   // driver capabilities, used for announcing and negotiating (with Grbl) driver functionality
 
-#ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+#if SAFETY_DOOR_ENABLE
     hal.signals_cap.safety_door_ajar = On;
 #endif
 #if ESTOP_ENABLE
