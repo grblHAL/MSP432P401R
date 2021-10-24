@@ -1234,18 +1234,21 @@ void settings_changed (settings_t *settings)
     }
 }
 
-static char *port2char (void *port)
+static char *port2char (void *port, uint8_t pin)
 {
     switch((uint32_t)port) {
 
         case((uint32_t)PA):
-            return "PA";
+            return pin <= 7 ? "P1." : "P2.";
 
         case((uint32_t)PB):
-            return "PB";
+            return pin <= 7 ? "P3." : "P4.";
 
         case((uint32_t)PC):
-            return "PC";
+            return pin <= 7 ? "P5." : "P6.";
+
+        case((uint32_t)PD):
+            return pin <= 7 ? "P7." : "P8.";
     }
 
     return "?";
@@ -1259,10 +1262,10 @@ static void enumeratePins (bool low_level, pin_info_ptr pin_info)
     pin.mode.input = On;
 
     for(i = 0; i < sizeof(inputpin) / sizeof(input_signal_t); i++) {
-        pin.pin = inputpin[i].pin;
+        pin.pin = inputpin[i].pin > 7 ? inputpin[i].pin - 8 : inputpin[i].pin;
         pin.function = inputpin[i].id;
         pin.group = inputpin[i].group;
-        pin.port = low_level ? (void *)inputpin[i].port : (void *)port2char(inputpin[i].port);
+        pin.port = low_level ? (void *)inputpin[i].port : (void *)port2char(inputpin[i].port, inputpin[i].pin);
         pin.mode.pwm = pin.group == PinGroup_SpindlePWM;
         pin.description = inputpin[i].description;
 
@@ -1273,10 +1276,10 @@ static void enumeratePins (bool low_level, pin_info_ptr pin_info)
     pin.mode.output = On;
 
     for(i = 0; i < sizeof(outputpin) / sizeof(output_signal_t); i++) {
-        pin.pin = outputpin[i].pin;
+        pin.pin = outputpin[i].pin > 7 ? outputpin[i].pin - 8 : outputpin[i].pin;
         pin.function = outputpin[i].id;
         pin.group = outputpin[i].group;
-        pin.port = low_level ? (void *)outputpin[i].port : (void *)port2char(outputpin[i].port);
+        pin.port = low_level ? (void *)outputpin[i].port : (void *)port2char(outputpin[i].port, outputpin[i].pin);
         pin.description = outputpin[i].description;
 
         pin_info(&pin);
@@ -1445,7 +1448,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "210908";
+    hal.driver_version = "211020";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
