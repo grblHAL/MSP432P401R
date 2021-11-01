@@ -91,6 +91,14 @@
 #include "spindle/huanyang.h"
 #endif
 
+#if MODBUS_ENABLE
+#include "spindle/modbus.h"
+#endif
+
+#ifndef VFD_SPINDLE
+#define VFD_SPINDLE 0
+#endif
+
 #if TRINAMIC_ENABLE && CNC_BOOSTERPACK_A4998 == 0
 #undef CNC_BOOSTERPACK_A4998
 #define CNC_BOOSTERPACK_A4998 1

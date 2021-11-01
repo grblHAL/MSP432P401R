@@ -1448,7 +1448,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "211020";
+    hal.driver_version = "211029";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1576,12 +1576,15 @@ bool driver_init (void)
         }
     }
 
-
     ioports_init(&aux_inputs, &aux_outputs);
 #endif
 
-#if SPINDLE_HUANYANG > 0
-    huanyang_init(modbus_init(serial2Init(115200), NULL));
+#if MODBUS_ENABLE
+    modbus_init(serial2Init(115200), NULL);
+#endif
+
+#if SPINDLE_HUANYANG
+    huanyang_init();
 #endif
 
 #include "grbl/plugins_init.h"

@@ -27,13 +27,14 @@
 // Uncomment to enable, for some a value > 1 may be assigned, if so the default value is shown.
 
 //#define PLASMA_ENABLE      1 // Plasma/THC plugin.
-//#define SPINDLE_HUANYANG   1 // Set to 1 or 2 for Huanyang VFD spindle. Requires spindle plugin.
+//#define SPINDLE_HUANYANG   1 // Set to 1 or 2 for Huanyang VFD spindle.
+//#define MODBUS_ENABLE      1 // Set to 1 for auto direction, 2 for direction signal on auxillary output pin.
 //#define KEYPAD_ENABLE      1 // I2C keypad for jogging etc., requires keypad plugin.
 //#define TRINAMIC_ENABLE 2130 // Trinamic TMC2130 stepper driver support. NOTE: work in progress.
 //#define TRINAMIC_ENABLE 5160 // Trinamic TMC5160 stepper driver support. NOTE: work in progress.
 //#define TRINAMIC_I2C       0 // Trinamic I2C - SPI bridge interface.
 //#define ODOMETER_ENABLE    1 // Odometer plugin. To be completed.
-//#define EEPROM_ENABLE      1 // I2C EEPROM support. Set to 1 for 24LC16(2K), 2 for larger sizes. Requires eeprom plugin.
+//#define EEPROM_ENABLE      1 // I2C EEPROM support. Set to 1 for 24LC16 (2K), 3 for 24C32 (4K - 32 byte page) and 2 for other sizes. Uses eeprom plugin.
 //#define EEPROM_IS_FRAM     1 // Uncomment when EEPROM is enabled and chip is FRAM, this to remove write delay.
 //#define LIMITS_OVERRIDE_ENABLE 1
 
