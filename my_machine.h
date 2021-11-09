@@ -29,7 +29,7 @@
 //#define PLASMA_ENABLE      1 // Plasma/THC plugin.
 //#define SPINDLE_HUANYANG   1 // Set to 1 or 2 for Huanyang VFD spindle.
 //#define MODBUS_ENABLE      1 // Set to 1 for auto direction, 2 for direction signal on auxillary output pin.
-//#define KEYPAD_ENABLE      1 // I2C keypad for jogging etc., requires keypad plugin.
+//#define KEYPAD_ENABLE      1 // Set to 1 for I2C keypad, 2 for other input such as serial data
 //#define TRINAMIC_ENABLE 2130 // Trinamic TMC2130 stepper driver support. NOTE: work in progress.
 //#define TRINAMIC_ENABLE 5160 // Trinamic TMC5160 stepper driver support. NOTE: work in progress.
 //#define TRINAMIC_I2C       0 // Trinamic I2C - SPI bridge interface.

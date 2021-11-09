@@ -52,8 +52,8 @@
 #define SERIAL_MODULE_INT eusciINT(SERIAL_MOD)
 #define SERIAL_IRQHandler eusciHANDLER(SERIAL_MOD)
 #define SERIAL_PORT P1
-#define SERIAL_RX BIT2
-#define SERIAL_TX BIT3
+#define SERIAL_RX_PIN 2
+#define SERIAL_TX_PIN 3
 #define SERIAL_RTS_PORT P1
 #define SERIAL_RTS_PIN 4
 #define SERIAL_RTS_BIT (1<<SERIAL_RTS_PIN)
@@ -64,8 +64,8 @@
 #define SERIAL2_MODULE_INT eusciINT(SERIAL2_MOD)
 #define SERIAL2_IRQHandler eusciHANDLER(SERIAL2_MOD)
 #define SERIAL2_PORT P3
-#define SERIAL2_RX BIT2
-#define SERIAL2_TX BIT3
+#define SERIAL2_RX_PIN 2
+#define SERIAL2_TZ_PIN 3
 #endif
 
 //

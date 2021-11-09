@@ -194,6 +194,12 @@
 #define RPM_INDEX_PORT  port(C)
 #define RPM_INDEX_PIN   11
 
+#if KEYPAD_ENABLE == 1 && !defined(I2C_STROBE_PORT)
+#error Keypad plugin not supported!
+#elif I2C_STROBE_ENABLE && !defined(I2C_STROBE_PORT)
+#error I2C strobe not supported!
+#endif
+
 typedef struct {
     pin_function_t id;
     DIO_PORT_Interruptable_Type *port;

@@ -3,7 +3,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2018-2019 Terje Io
+  Copyright (c) 2018-2021 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 void i2c_init (void);
 bool I2CPOS (void);
 
-#if KEYPAD_ENABLE
+#if KEYPAD_ENABLE == 1
 
 #include "keypad/keypad.h"
 

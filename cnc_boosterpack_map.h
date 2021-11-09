@@ -234,9 +234,9 @@
 #define LIMITS_OVERRIDE_PIN     6
 #endif
 
-#if KEYPAD_ENABLE // GPIO6
-#define KEYPAD_PORT             port(B)
-#define KEYPAD_IRQ_PIN          9
+#if I2C_STROBE_ENABLE // GPIO6
+#define I2C_STROBE_PORT         port(B)
+#define I2C_STROBE_PIN          9
 #endif
 
 #define I2C_PN                  B1

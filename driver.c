@@ -23,6 +23,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "driver.h"
@@ -54,6 +55,8 @@ typedef struct {
     input_signal_t *signal[DEBOUNCE_QUEUE];
 } debounce_queue_t;
 
+static periph_signal_t *periph_pins = NULL;
+
 static input_signal_t inputpin[] = {
     { .id = Input_Reset,          .port = RESET_PORT,         .pin = RESET_PIN,           .group = PinGroup_Control },
     { .id = Input_FeedHold,       .port = FEED_HOLD_PORT,     .pin = FEED_HOLD_PIN,       .group = PinGroup_Control },
@@ -62,8 +65,8 @@ static input_signal_t inputpin[] = {
     { .id = Input_SafetyDoor,     .port = SAFETY_DOOR_PORT,   .pin = SAFETY_DOOR_PIN,     .group = PinGroup_Control },
 #endif
     { .id = Input_Probe,          .port = PROBE_PORT,         .pin = PROBE_PIN,           .group = PinGroup_Probe },
-#ifdef KEYPAD_IRQ_PIN
-    { .id = Input_KeypadStrobe,   .port = KEYPAD_PORT,        .pin = KEYPAD_IRQ_PIN,      .group = PinGroup_Keypad },
+#ifdef I2C_STROBE_PIN
+    { .id = Input_KeypadStrobe,   .port = I2C_STROBE_PORT,        .pin = I2C_STROBE_PIN,      .group = PinGroup_Keypad },
 #endif
 #ifdef MODE_SWITCH_PIN
     { .id = Input_ModeSelect,     .port = MODE_PORT,          .pin = MODE_SWITCH_PIN,     .group = PinGroup_MPG },
@@ -197,7 +200,7 @@ static spindle_encoder_t spindle_encoder = {
 static spindle_sync_t spindle_tracker;
 static delay_t delay = { .ms = 1, .callback = NULL }; // NOTE: initial ms set to 1 for "resetting" systick timer on startup
 
-#ifndef VFD_SPINDLE
+#if !VFD_SPINDLE
 static bool pwmEnabled = false;
 static spindle_pwm_t spindle_pwm;
 
@@ -241,6 +244,22 @@ static probeflags_t psettings =
 static void stepperPulseStartSynchronized (stepper_t *stepper);
 static void spindleDataReset (void);
 static spindle_data_t *spindleGetData (spindle_data_request_t request);
+
+#if I2C_STROBE_ENABLE
+
+static driver_irq_handler_t i2c_strobe = { .type = IRQ_I2C_Strobe };
+
+static bool irq_claim (irq_type_t irq, uint_fast8_t id, irq_callback_ptr handler)
+{
+    bool ok;
+
+    if((ok = irq == IRQ_I2C_Strobe && i2c_strobe.callback == NULL))
+        i2c_strobe.callback = handler;
+
+    return ok;
+}
+
+#endif
 
 // LinuxCNC example settings
 // MAX_OUTPUT = 300 DEADBAND = 0.0 P = 3 I = 1.0 D = 0.1 FF0 = 0.0 FF1 = 0.1 FF2 = 0.0 BIAS = 0.0 MAXI = 20.0 MAXD = 20.0 MAXERROR = 250.0
@@ -588,7 +607,7 @@ inline static float spindle_calc_rpm (uint32_t tpp)
     return spindle_encoder.rpm_factor / (float)tpp;
 }
 
-#ifndef VFD_SPINDLE
+#if !VFD_SPINDLE
 
 // Static spindle (off, on cw & on ccw)
 
@@ -942,8 +961,8 @@ static void modeEnable (void)
     BITBAND_PERI(MODE_PORT->IES, MODE_SWITCH_PIN) = !on;
     BITBAND_PERI(MODE_PORT->IFG, MODE_SWITCH_PIN) = 0;
     BITBAND_PERI(MODE_PORT->IE, MODE_SWITCH_PIN) = 1;
-#if KEYPAD_ENABLE
-    BITBAND_PERI(KEYPAD_PORT->IE, KEYPAD_IRQ_PIN) = 1;
+#if I2C_STROBE_ENABLE
+    BITBAND_PERI(I2C_STROBE_PORT->IE, I2C_STROBE_PIN) = 1;
 #endif
 }
 
@@ -957,7 +976,7 @@ uint32_t getElapsedTicks (void)
 // Configure perhipherals when settings are initialized or changed
 void settings_changed (settings_t *settings)
 {
-#ifndef VFD_SPINDLE
+#if !VFD_SPINDLE
 
     if((hal.driver_cap.variable_spindle = settings->spindle.rpm_min < settings->spindle.rpm_max)) {
         if(settings->spindle.pwm_freq > 200.0f)
@@ -1017,7 +1036,7 @@ void settings_changed (settings_t *settings)
 
         stepperEnable(settings->steppers.deenergize);
 
-#ifndef VFD_SPINDLE
+#if !VFD_SPINDLE
 
         if(hal.driver_cap.variable_spindle) {
             SPINDLE_PWM_TIMER->CCR[0] = spindle_pwm.period;
@@ -1284,16 +1303,54 @@ static void enumeratePins (bool low_level, pin_info_ptr pin_info)
 
         pin_info(&pin);
     };
-/*
-    for(i = 0; i < sizeof(peripin) / sizeof(output_signal_t); i++) {
-        pin.pin = peripin[i].pin;
-        pin.function = peripin[i].id;
-        pin.mode.output = PIN_ISOUTPUT(pin.function);
-        pin.group = peripin[i].group;
-        pin.port = low_level ? (void *)peripin[i].port : (void *)port2char(peripin[i].port);
+
+    periph_signal_t *ppin = periph_pins;
+
+    if(ppin) do {
+        pin.pin = ppin->pin.pin > 7 ? ppin->pin.pin - 8 : ppin->pin.pin;
+        pin.function = ppin->pin.function;
+        pin.group = ppin->pin.group;
+        pin.port = low_level ? ppin->pin.port : (void *)port2char(ppin->pin.port, ppin->pin.pin);
+        pin.mode = ppin->pin.mode;
+        pin.description = ppin->pin.description;
 
         pin_info(&pin);
-    }; */
+
+        ppin = ppin->next;
+    } while(ppin);
+}
+
+void registerPeriphPin (const periph_pin_t *pin)
+{
+    periph_signal_t *add_pin = malloc(sizeof(periph_signal_t));
+
+    if(!add_pin)
+        return;
+
+    memcpy(&add_pin->pin, pin, sizeof(periph_pin_t));
+    add_pin->next = NULL;
+
+    if(periph_pins == NULL) {
+        periph_pins = add_pin;
+    } else {
+        periph_signal_t *last = periph_pins;
+        while(last->next)
+            last = last->next;
+        last->next = add_pin;
+    }
+}
+
+void setPeriphPinDescription (const pin_function_t function, const pin_group_t group, const char *description)
+{
+    periph_signal_t *ppin = periph_pins;
+
+    if(ppin) do {
+        if(ppin->pin.function == function && ppin->pin.group == group) {
+            ppin->pin.description = description;
+            ppin = NULL;
+        } else
+            ppin = ppin->next;
+    } while(ppin);
 }
 
 // Initializes MCU peripherals for grblHAL use
@@ -1339,13 +1396,23 @@ static bool driver_setup (settings_t *settings)
 
  // Spindle init
 
-#ifndef VFD_SPINDLE
+#if !VFD_SPINDLE
 
     SPINDLE_PWM_PORT->DIR |= (1 << SPINDLE_PWM_PIN);
     SPINDLE_PWM_PORT->SEL1 &= ~(1 << SPINDLE_PWM_PIN);
     SPINDLE_PWM_PORT->SEL0 |= (1 << SPINDLE_PWM_PIN);
     SPINDLE_PWM_TIMER->CTL = TIMER_A_CTL_SSEL__SMCLK;
     SPINDLE_PWM_TIMER->EX0 = 0;
+
+    static const periph_pin_t pwm = {
+        .function = Output_SpindlePWM,
+        .group = PinGroup_SpindlePWM,
+        .port = SPINDLE_PWM_PORT,
+        .pin = SPINDLE_PWM_PIN,
+        .mode = { .mask = PINMODE_OUTPUT }
+    };
+
+    hal.periph_port.register_pin(&pwm);
 
 #endif
 
@@ -1448,7 +1515,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "211029";
+    hal.driver_version = "211108";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1474,7 +1541,7 @@ bool driver_init (void)
     hal.probe.get_state = probeGetState;
     hal.probe.connected_toggle = probeConnectedToggle;
 
-#ifndef VFD_SPINDLE
+#if !VFD_SPINDLE
     hal.spindle.set_state = spindleSetState;
     hal.spindle.get_state = spindleGetState;
   #ifdef SPINDLE_PWM_DIRECT
@@ -1487,15 +1554,20 @@ bool driver_init (void)
 
     hal.control.get_state = systemGetState;
 
-    memcpy(&hal.stream, serialInit(), sizeof(io_stream_t));
-
     hal.irq_enable = enable_irq;
     hal.irq_disable = disable_irq;
+#if I2C_STROBE_ENABLE
+    hal.irq_claim = irq_claim;
+#endif
     hal.set_bits_atomic = bitsSetAtomic;
     hal.clear_bits_atomic = bitsClearAtomic;
     hal.set_value_atomic = valueSetAtomic;
     hal.get_elapsed_ticks = getElapsedTicks;
     hal.enumerate_pins = enumeratePins;
+    hal.periph_port.register_pin = registerPeriphPin;
+    hal.periph_port.set_pin_description = setPeriphPinDescription;
+
+    memcpy(&hal.stream, serialInit(), sizeof(io_stream_t));
 
 #if I2C_ENABLE
     i2c_init();
@@ -1524,7 +1596,7 @@ bool driver_init (void)
 #endif
 
     hal.driver_cap.spindle_sync = On;
-#ifndef VFD_SPINDLE
+#if !VFD_SPINDLE
     hal.driver_cap.spindle_at_speed = On;
     hal.driver_cap.spindle_dir = On;
   #ifdef SPINDLE_RPM_CONTROLLED
@@ -1737,9 +1809,10 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t *input, 
                     break;
 #endif
 
-#if KEYPAD_ENABLE
+#if I2C_STROBE_ENABLE
                 case PinGroup_Keypad:
-                    keypad_keyclick_handler(!BITBAND_PERI(KEYPAD_PORT->IN, KEYPAD_IRQ_PIN));
+                    if(i2c_strobe.callback)
+                        i2c_strobe.callback(0, !BITBAND_PERI(I2C_STROBE_PORT->IN, I2C_STROBE_PIN));
                     break;
 #endif
 
