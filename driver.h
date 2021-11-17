@@ -87,16 +87,8 @@
 
 // End configuration
 
-#if SPINDLE_HUANYANG
-#include "spindle/huanyang.h"
-#endif
-
 #if MODBUS_ENABLE
 #include "spindle/modbus.h"
-#endif
-
-#ifndef VFD_SPINDLE
-#define VFD_SPINDLE 0
 #endif
 
 #if TRINAMIC_ENABLE && CNC_BOOSTERPACK_A4998 == 0
@@ -219,6 +211,7 @@ typedef struct {
     DIO_PORT_Interruptable_Type *port;
     uint8_t pin;
     pin_group_t group;
+    pin_mode_t mode;
     const char *description;
 } output_signal_t;
 

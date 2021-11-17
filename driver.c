@@ -1075,7 +1075,8 @@ void settings_changed (settings_t *settings)
 
             pullup = false;
             input = &inputpin[--i];
-            input->irq_mode = IRQ_Mode_None;
+            if(input->group != PinGroup_AuxInput)
+                input->irq_mode = IRQ_Mode_None;
             input->bit = 1 << input->pin;
             BITBAND_PERI(input->port->IE, input->pin) = 0;
 
@@ -1174,11 +1175,8 @@ void settings_changed (settings_t *settings)
                     break;
             }
 
-            if(input->group == PinGroup_AuxInput) {
+            if(input->group == PinGroup_AuxInput)
                 pullup = true;
-                input->cap.pull_mode = (PullMode_Up|PullMode_Down);
-                input->cap.irq_mode = (IRQ_Mode_Rising|IRQ_Mode_Falling);
-            }
 
             input->debounce = hal.driver_cap.software_debounce && (input->group == PinGroup_Limit || input->group == PinGroup_Control);
 
@@ -1515,7 +1513,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "211108";
+    hal.driver_version = "211113";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1628,6 +1626,8 @@ bool driver_init (void)
             if(aux_inputs.pins.inputs == NULL)
                 aux_inputs.pins.inputs = input;
             aux_inputs.n_pins++;
+            input->cap.pull_mode = PullMode_UpDown;
+            input->cap.irq_mode = (IRQ_Mode_Rising|IRQ_Mode_Falling);
         }
 
         if(input->group == PinGroup_Limit) {
@@ -1653,10 +1653,6 @@ bool driver_init (void)
 
 #if MODBUS_ENABLE
     modbus_init(serial2Init(115200), NULL);
-#endif
-
-#if SPINDLE_HUANYANG
-    huanyang_init();
 #endif
 
 #include "grbl/plugins_init.h"
