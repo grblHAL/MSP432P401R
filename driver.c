@@ -1433,7 +1433,7 @@ static bool driver_setup (settings_t *settings)
     atc_init();
 #endif
 
-    IOInitDone = settings->version == 19;
+    IOInitDone = settings->version == 21;
 
     hal.settings_changed(settings);
     hal.stepper.go_idle(true);
@@ -1513,7 +1513,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "211113";
+    hal.driver_version = "211121";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1658,7 +1658,7 @@ bool driver_init (void)
 #include "grbl/plugins_init.h"
 
     // no need to move version check before init - compiler will fail any signature mismatch for existing entries
-    return hal.version == 8;
+    return hal.version == 9;
 }
 
 /* interrupt handlers */
