@@ -70,9 +70,10 @@
 
 //
 
-const io_stream_t *serialInit(void);
+void serialRegisterStreams (void);
+const io_stream_t *serialInit (uint32_t baud_rate);
 #ifdef SERIAL2_MOD
-const io_stream_t *serial2Init(uint32_t baud_rate);
+const io_stream_t *serial2Init (uint32_t baud_rate);
 #endif
 
 /*EOF*/

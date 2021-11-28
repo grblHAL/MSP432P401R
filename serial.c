@@ -39,8 +39,42 @@ static enqueue_realtime_command_ptr enqueue_realtime_command2 = protocol_enqueue
 #endif
 
 #ifdef RTS_PORT
-  static volatile uint8_t rts_state = 0;
+static volatile uint8_t rts_state = 0;
 #endif
+
+static io_stream_properties_t serial[] = {
+    {
+      .type = StreamType_Serial,
+      .instance = 0,
+      .flags.claimable = On,
+      .flags.claimed = Off,
+      .flags.connected = On,
+      .flags.can_set_baud = Off,
+      .claim = serialInit
+    },
+#ifdef SERIAL2_MOD
+    {
+      .type = StreamType_Serial,
+      .instance = 1,
+      .flags.claimable = On,
+      .flags.claimed = Off,
+      .flags.connected = On,
+      .flags.can_set_baud = On,
+      .flags.modbus_ready = On,
+      .claim = serial2Init
+    }
+#endif
+};
+
+void serialRegisterStreams (void)
+{
+    static io_stream_details_t streams = {
+        .n_streams = sizeof(serial) / sizeof(io_stream_properties_t),
+        .streams = serial,
+    };
+
+    stream_register_streams(&streams);
+}
 
 static int16_t serialGetC (void);
 
@@ -227,7 +261,7 @@ static enqueue_realtime_command_ptr serialSetRtHandler (enqueue_realtime_command
     return prev;
 }
 
-const io_stream_t *serialInit (void)
+const io_stream_t *serialInit (uint32_t baud_rate)
 {
     static const io_stream_t stream = {
         .type = StreamType_Serial,
@@ -244,6 +278,11 @@ const io_stream_t *serialInit (void)
         .disable_rx = serialDisable,
         .set_enqueue_rt_handler = serialSetRtHandler
     };
+
+    if(serial[0].flags.claimed || baud_rate != 115200)
+        return NULL;
+
+    serial[0].flags.claimed = On;
 
     SERIAL_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
     SERIAL_MODULE->BRW = 6;
@@ -527,6 +566,11 @@ const io_stream_t *serial2Init (uint32_t baud_rate)
         .disable_rx = serial2Disable,
         .set_enqueue_rt_handler = serial2SetRtHandler
     };
+
+    if(serial[1].flags.claimed)
+        return NULL;
+
+    serial[1].flags.claimed = On;
 
     SERIAL2_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
 

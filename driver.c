@@ -1565,7 +1565,7 @@ bool driver_init (void)
     hal.periph_port.register_pin = registerPeriphPin;
     hal.periph_port.set_pin_description = setPeriphPinDescription;
 
-    memcpy(&hal.stream, serialInit(), sizeof(io_stream_t));
+    memcpy(&hal.stream, serialInit(115200), sizeof(io_stream_t));
 
 #if I2C_ENABLE
     i2c_init();
@@ -1649,10 +1649,6 @@ bool driver_init (void)
     }
 
     ioports_init(&aux_inputs, &aux_outputs);
-#endif
-
-#if MODBUS_ENABLE
-    modbus_init(serial2Init(115200), NULL);
 #endif
 
 #include "grbl/plugins_init.h"
