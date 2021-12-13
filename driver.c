@@ -1513,7 +1513,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "211121";
+    hal.driver_version = "211210";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1565,7 +1565,7 @@ bool driver_init (void)
     hal.periph_port.register_pin = registerPeriphPin;
     hal.periph_port.set_pin_description = setPeriphPinDescription;
 
-    memcpy(&hal.stream, serialInit(115200), sizeof(io_stream_t));
+    stream_connect(serialInit(115200));
 
 #if I2C_ENABLE
     i2c_init();
