@@ -27,7 +27,7 @@
 // Uncomment to enable, for some a value > 1 may be assigned, if so the default value is shown.
 
 //#define PLASMA_ENABLE      1 // Plasma/THC plugin.
-//#define HUANYANG_ENABLE    1 // Set to 1 or 2 for Huanyang VFD spindle.
+//#define VFD_ENABLE         1 // Set to 1 or 2 for Huanyang VFD spindle. More here https://github.com/grblHAL/Plugins_spindle
 //#define MODBUS_ENABLE      1 // Set to 1 for auto direction, 2 for direction signal on auxillary output pin.
 //#define KEYPAD_ENABLE      1 // Set to 1 for I2C keypad, 2 for other input such as serial data
 //#define TRINAMIC_ENABLE 2130 // Trinamic TMC2130 stepper driver support. NOTE: work in progress.

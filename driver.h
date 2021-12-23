@@ -108,9 +108,8 @@
 #include "plasma/thc.h"
 #endif
 
-#if (TRINAMIC_ENABLE && TRINAMIC_I2C) || ATC_ENABLE || EEPROM_ENABLE
-#define I2C_ENABLE 1
-#else
+#if ATC_ENABLE
+#undef I2C_ENABLE
 #define I2C_ENABLE 1
 #endif
 
