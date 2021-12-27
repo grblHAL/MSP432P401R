@@ -248,6 +248,10 @@ void I2C_GetKeycode (uint32_t i2cAddr, keycode_callback_ptr callback)
 
 static uint8_t axis = 0xFF;
 
+TMCI2C_enable_dgr_t dgr_enable = {
+    .addr.value = TMC_I2CReg_ENABLE
+};
+
 TMC_spi_status_t tmc_spi_read (trinamic_motor_t driver, TMC_spi_datagram_t *datagram)
 {
     uint8_t *res;
@@ -301,6 +305,22 @@ TMC_spi_status_t tmc_spi_write (trinamic_motor_t driver, TMC_spi_datagram_t *dat
     return status;
 }
 
+static void trinamic_stepper_enable (axes_signals_t enable)
+{
+    enable.mask ^= settings.steppers.enable_invert.mask;
+
+    dgr_enable.reg.enable.mask = enable.mask & driver_enabled.mask;
+
+    tmc_spi_write((trinamic_motor_t){0}, (TMC_spi_datagram_t *)&dgr_enable);
+}
+
+void motor_postinit (motor_map_t motor, const tmchal_t *driver)
+{
+    dgr_enable.reg.monitor.mask |= 1 << motor.axis;
+
+    tmc_spi_write((trinamic_motor_t){0}, (TMC_spi_datagram_t *)&dgr_enable);
+}
+
 #endif
 
 static void pos_failed (uint_fast16_t state)
@@ -350,6 +370,18 @@ void i2c_init (void)
 
     hal.periph_port.register_pin(&scl);
     hal.periph_port.register_pin(&sda);
+
+#if TRINAMIC_ENABLE && TRINAMIC_I2C
+    static trinamic_driver_if_t driver_if = {
+        .on_drivers_init = if_init,
+        .on_motor_postinit = motor_postinit
+    };
+
+    stepper_enable = hal.stepper.enable;
+    hal.stepper.enable = trinamic_stepper_enable;
+
+    trinamic_if_init(&driver_if);
+#endif
 }
 
 void I2C_IRQHandler (void)

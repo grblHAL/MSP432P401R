@@ -992,12 +992,10 @@ void settings_changed (settings_t *settings)
 
   #ifdef SPINDLE_RPM_CONTROLLED
 
-    if((spindle_control.pid_enabled = hal.spindle.get_data && settings->spindle.pid.p_gain != 0.0f)) {
-        if(memcmp(&spindle_control.pid.cfg, &settings->spindle.pid, sizeof(pid_values_t)) != 0) {
-            spindle_set_state((spindle_state_t){0}, 0.0f);
-            pidf_init(&spindle_control.pid, &settings->spindle.pid);
-      //      spindle_encoder.pid.cfg.i_max_error = spindle_encoder.pid.cfg.i_max_error / settings->spindle.pid.i_gain; // Makes max value sensible?
-        }
+    if((spindle_control.pid_enabled = hal.spindle.get_data && (settings->spindle.pid.p_gain != 0.0) || pidf_config_changed(&spindle_control.pid, &settings->spindle.pid))) {
+        spindle_set_state((spindle_state_t){0}, 0.0f);
+        pidf_init(&spindle_control.pid, &settings->spindle.pid);
+  //      spindle_encoder.pid.cfg.i_max_error = spindle_encoder.pid.cfg.i_max_error / settings->spindle.pid.i_gain; // Makes max value sensible?
     } else
         spindle_control.pid_state = PIDState_Disabled;
 
@@ -1005,9 +1003,11 @@ void settings_changed (settings_t *settings)
 
 #endif
 
-    if((hal.spindle.get_data = hal.driver_cap.spindle_at_speed ? spindleGetData : NULL) && spindle_encoder.ppr != settings->spindle.ppr) {
+    if((hal.spindle.get_data = (hal.driver_cap.spindle_at_speed = settings->spindle.ppr > 0) ? spindleGetData : NULL) &&
+         (spindle_encoder.ppr != settings->spindle.ppr || pidf_config_changed(&spindle_tracker.pid, &settings->position.pid))) {
 
         hal.spindle.reset_data = spindleDataReset;
+        hal.spindle.set_state((spindle_state_t){0}, 0.0f);
 
         pidf_init(&spindle_tracker.pid, &settings->position.pid);
 
@@ -1513,7 +1513,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "211210";
+    hal.driver_version = "211226";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1930,7 +1930,7 @@ void SysTick_Handler (void)
             else if(spindle_data.index_count > 2)
                 spindle_control.pid_state = PIDState_Active;
 
-            tpp += spindle_encoder.timer.pulse_length / spindle_encoder.counter.tics_per_irq;
+            tpp += spindle_encoder.timer.pulse_length / spindle_encoder.tics_per_irq;
 
             if(--spid == 0) {
                 spindle_control.rpm = spindle_calc_rpm(tpp / SPINDLE_PID_SAMPLE_RATE);
@@ -1940,7 +1940,7 @@ void SysTick_Handler (void)
             break;
 
         case PIDState_Active:
-            tpp += spindle_encoder.timer.pulse_length / spindle_encoder.counter.tics_per_irq;
+            tpp += spindle_encoder.timer.pulse_length / spindle_encoder.tics_per_irq;
             if(--spid == 0) {
                 spindle_rpm_pid(tpp / SPINDLE_PID_SAMPLE_RATE);
                 tpp = 0;

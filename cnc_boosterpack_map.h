@@ -39,15 +39,15 @@
 #define BOARD_NAME "CNC BoosterPack"
 #endif
 
-#ifdef EEPROM_ENABLE
-#undef EEPROM_ENABLE
-#endif
-
 #ifdef CNC_BOOSTERPACK
 #undef CNC_BOOSTERPACK
 #endif
 
+#undef I2C_ENABLE
+#undef EEPROM_ENABLE
+
 #define CNC_BOOSTERPACK  1 // Do not change!
+#define I2C_ENABLE       1 // Only change if BoosterPack does not have EEPROM mounted
 #define EEPROM_ENABLE    1 // Only change if BoosterPack does not have EEPROM mounted
 
 #define HAS_IOPORTS
