@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2021 Terje Io
+  Copyright (c) 2017-2022 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -212,7 +212,7 @@
 #define GPIO6_INT               portINT(GPIO6_PN)
 #define GPIO6_PIN               1
 
-#if !(MPG_MODE_ENABLE || MODBUS_ENABLE)
+#if !(MPG_MODE == 1 || MODBUS_ENABLE)
 #define AUXINPUT0_PORT          port(B)
 #define AUXINPUT0_PIN           2 // GPIO4
 
@@ -222,9 +222,9 @@
 
 // Define MPG mode input (for selecting secondary UART input)
 
-#if MPG_MODE_ENABLE // GPIO2
-#define MODE_PORT               port(C)
-#define MODE_SWITCH_PIN         2
+#if MPG_MODE == 1
+#define MPG_MODE_PORT           port(C)
+#define MPG_MODE_PIN            2 // GPIO2
 #endif
 
 // Define limit switches override input

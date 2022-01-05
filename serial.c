@@ -548,7 +548,7 @@ const io_stream_t *serial2Init (uint32_t baud_rate)
     static const io_stream_t stream = {
         .type = StreamType_Serial,
         .instance = 1,
-        .connected = true,
+        .state.connected = true,
         .read = serial2GetC,
         .write = serial2WriteS,
         .write_n =  serial2Write,
@@ -593,7 +593,7 @@ const io_stream_t *serial2Init (uint32_t baud_rate)
     NVIC_SetPriority(SERIAL2_MODULE_INT, 3);
     NVIC_EnableIRQ(SERIAL2_MODULE_INT);
 
-    SERIAL2_PORT->SEL0 = (1<<SERIAL2_RX_PIN)|(1<<SERIAL_TX2_PIN);    // set 2-UART pins as second function
+    SERIAL2_PORT->SEL0 = (1<<SERIAL2_RX_PIN)|(1<<SERIAL2_TX_PIN);    // set 2-UART pins as second function
 
 #if MODBUS_ENABLE
     SERIAL2_MODULE->IE = EUSCI_A_IE_RXIE;
@@ -603,7 +603,7 @@ const io_stream_t *serial2Init (uint32_t baud_rate)
         .function = Output_TX,
         .group = PinGroup_UART2,
         .port = SERIAL2_PORT,
-        .pin = SERIAL_TX2_PIN,
+        .pin = SERIAL2_TX_PIN,
         .mode = { .mask = PINMODE_OUTPUT },
         .description = "Secondary UART"
     };

@@ -3,7 +3,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2020-2021 Terje Io
+  Copyright (c) 2020-2022 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@
 //#define PLASMA_ENABLE      1 // Plasma/THC plugin.
 //#define VFD_ENABLE         1 // Set to 1 or 2 for Huanyang VFD spindle. More here https://github.com/grblHAL/Plugins_spindle
 //#define MODBUS_ENABLE      1 // Set to 1 for auto direction, 2 for direction signal on auxillary output pin.
+//#define MPG_ENABLE         1 // Enable MPG interface. Requires serial port and one handshake pin.
 //#define KEYPAD_ENABLE      1 // Set to 1 for I2C keypad, 2 for other input such as serial data
 //#define TRINAMIC_ENABLE 2130 // Trinamic TMC2130 stepper driver support. NOTE: work in progress.
 //#define TRINAMIC_ENABLE 5160 // Trinamic TMC5160 stepper driver support. NOTE: work in progress.
@@ -40,7 +41,6 @@
 
 //#define ESTOP_ENABLE       0 // When enabled only real-time report requests will be executed when the reset pin is asserted.
                                // Note: if left commented out the default setting is determined from COMPATIBILITY_LEVEL.
-//#define  MPG_MODE_ENABLE 1
 
 #ifdef BOARD_CNC_BOOSTERPACK
 #define CNC_BOOSTERPACK_SHORTS 0 // Shorts added to BoosterPack for some signals (for faster and simpler driver)

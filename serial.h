@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2020 Terje Io
+  Copyright (c) 2017-2022 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -58,14 +58,14 @@
 #define SERIAL_RTS_PIN 4
 #define SERIAL_RTS_BIT (1<<SERIAL_RTS_PIN)
 
-#if MPG_MODE_ENABLE || MODBUS_ENABLE
+#if MPG_ENABLE || MODBUS_ENABLE
 #define SERIAL2_MOD A2
 #define SERIAL2_MODULE eusci(SERIAL2_MOD)
 #define SERIAL2_MODULE_INT eusciINT(SERIAL2_MOD)
 #define SERIAL2_IRQHandler eusciHANDLER(SERIAL2_MOD)
 #define SERIAL2_PORT P3
 #define SERIAL2_RX_PIN 2
-#define SERIAL2_TZ_PIN 3
+#define SERIAL2_TX_PIN 3
 #endif
 
 //

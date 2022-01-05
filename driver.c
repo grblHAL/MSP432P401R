@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2021 Terje Io
+  Copyright (c) 2017-2022 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -66,10 +66,10 @@ static input_signal_t inputpin[] = {
 #endif
     { .id = Input_Probe,          .port = PROBE_PORT,         .pin = PROBE_PIN,           .group = PinGroup_Probe },
 #ifdef I2C_STROBE_PIN
-    { .id = Input_KeypadStrobe,   .port = I2C_STROBE_PORT,        .pin = I2C_STROBE_PIN,      .group = PinGroup_Keypad },
+    { .id = Input_KeypadStrobe,   .port = I2C_STROBE_PORT,    .pin = I2C_STROBE_PIN,      .group = PinGroup_Keypad },
 #endif
-#ifdef MODE_SWITCH_PIN
-    { .id = Input_ModeSelect,     .port = MODE_PORT,          .pin = MODE_SWITCH_PIN,     .group = PinGroup_MPG },
+#ifdef MPG_MODE_PIN
+    { .id = Input_ModeSelect,     .port = MPG_MODE_PORT,      .pin = MPG_MODE_PIN,        .group = PinGroup_MPG },
 #endif
 // Limit input pins must be consecutive in this array
     { .id = Input_LimitX,         .port = LIMIT_PORT_X,       .pin = X_LIMIT_PIN,         .group = PinGroup_Limit },
@@ -189,9 +189,6 @@ static bool IOInitDone = false;
 // Inverts the probe pin state depending on user settings and probing cycle mode.
 static uint16_t pulse_length;
 static volatile uint32_t elapsed_tics = 0;
-#if MPG_MODE_ENABLE
-static const io_stream_t *mpg_stream;
-#endif
 static axes_signals_t next_step_outbits;
 static spindle_data_t spindle_data;
 static spindle_encoder_t spindle_encoder = {
@@ -935,32 +932,24 @@ static uint_fast16_t valueSetAtomic (volatile uint_fast16_t *ptr, uint_fast16_t 
     return prev;
 }
 
-#if MPG_MODE_ENABLE
+#if MPG_MODE == 1
 
-static void modeSelect (bool mpg_mode)
+static void mpg_select (sys_state_t state)
 {
-    BITBAND_PERI(MODE_PORT->IE, MODE_SWITCH_PIN) = 0;
-    BITBAND_PERI(MODE_PORT->IES, MODE_SWITCH_PIN) = !mpg_mode;
-    BITBAND_PERI(MODE_PORT->IFG, MODE_SWITCH_PIN) = 0;
-    BITBAND_PERI(MODE_PORT->IE, MODE_SWITCH_PIN) = 1;
+    stream_mpg_enable(BITBAND_PERI(MPG_MODE_PORT->IN, MPG_MODE_PIN) == 0);
 
-    stream_enable_mpg(mpg_stream, mpg_mode);
+    BITBAND_PERI(MPG_MODE_PORT->IES, MPG_MODE_PIN) = !sys.mpg_mode;
+    BITBAND_PERI(MPG_MODE_PORT->IFG, MPG_MODE_PIN) = 0;
+    BITBAND_PERI(MPG_MODE_PORT->IE, MPG_MODE_PIN) = 1;
 }
 
-static void modeChange (void)
+static void mpg_enable (sys_state_t state)
 {
-    modeSelect(BITBAND_PERI(MODE_PORT->IN, MODE_SWITCH_PIN) == 0);
-}
+    bool on = BITBAND_PERI(MPG_MODE_PORT->IN, MPG_MODE_PIN) == 0;
 
-static void modeEnable (void)
-{
-    bool on = BITBAND_PERI(MODE_PORT->IN, MODE_SWITCH_PIN) == 0;
+    if(sys.mpg_mode == (BITBAND_PERI(MPG_MODE_PORT->IN, MPG_MODE_PIN) == 0))
+        mpg_select(state);
 
-    if(sys.mpg_mode != on)
-        modeSelect(true);
-    BITBAND_PERI(MODE_PORT->IES, MODE_SWITCH_PIN) = !on;
-    BITBAND_PERI(MODE_PORT->IFG, MODE_SWITCH_PIN) = 0;
-    BITBAND_PERI(MODE_PORT->IE, MODE_SWITCH_PIN) = 1;
 #if I2C_STROBE_ENABLE
     BITBAND_PERI(I2C_STROBE_PORT->IE, I2C_STROBE_PIN) = 1;
 #endif
@@ -1238,14 +1227,12 @@ void settings_changed (settings_t *settings)
          *  MPG mode input enable  *
          ***************************/
 
-#if MPG_MODE_ENABLE
+#if MPG_MODE == 1
         if(hal.driver_cap.mpg_mode) {
             // Enable pullup and switch to input
-            BITBAND_PERI(MODE_PORT->OUT, MODE_SWITCH_PIN) = 1;
-            BITBAND_PERI(MODE_PORT->REN, MODE_SWITCH_PIN) = 1;
-            BITBAND_PERI(MODE_PORT->DIR, MODE_SWITCH_PIN) = 0;
-            // Delay mode enable a bit so grbl can finish startup and MPG controller can check ready status
-            hal.delay_ms(50, modeEnable);
+            BITBAND_PERI(MPG_MODE_PORT->OUT, MPG_MODE_PIN) = 1;
+            BITBAND_PERI(MPG_MODE_PORT->REN, MPG_MODE_PIN) = 1;
+            BITBAND_PERI(MPG_MODE_PORT->DIR, MPG_MODE_PIN) = 0;
         }
 #endif
     }
@@ -1506,14 +1493,14 @@ bool driver_init (void)
     SysTick->VAL = 0;
     SysTick->CTRL |= SysTick_CTRL_CLKSOURCE_Msk|SysTick_CTRL_TICKINT_Msk|SysTick_CTRL_ENABLE_Msk;
 
-#if MPG_MODE_ENABLE
+#if MPG_MODE == 1
     // Drive MPG mode input pin low until setup complete
-    BITBAND_PERI(MODE_PORT->DIR, MODE_SWITCH_PIN) = 1;
-    BITBAND_PERI(MODE_PORT->OUT, MODE_SWITCH_PIN) = 0;
+    BITBAND_PERI(MPG_MODE_PORT->DIR, MPG_MODE_PIN) = 1;
+    BITBAND_PERI(MPG_MODE_PORT->OUT, MPG_MODE_PIN) = 0;
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "211226";
+    hal.driver_version = "220104";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1611,9 +1598,9 @@ bool driver_init (void)
     hal.driver_cap.control_pull_up = On;
     hal.driver_cap.limits_pull_up = On;
     hal.driver_cap.probe_pull_up = On;
-#if MPG_MODE_ENABLE
-    hal.driver_cap.mpg_mode = On;
-    mpg_stream = serial2Init(115200);
+#if MPG_MODE == 1
+    if(hal.driver_cap.mpg_mode = stream_mpg_register(serial2Init(115200), false, NULL))
+        protocol_enqueue_rt_command(mpg_enable);
 #endif
 
     uint32_t i;
@@ -1794,10 +1781,10 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t *input, 
                     spindle_encoder.counter.index_count++;
                     break;
 
-#if MPG_MODE_ENABLE
+#if MPG_MODE == 1
                 case PinGroup_MPG:
-                    if(delay.ms == 0) // Ignore if delay is active
-                        driver_delay_ms(50, modeChange);
+                    BITBAND_PERI(MPG_MODE_PORT->IE, MPG_MODE_PIN) = 0;
+                    protocol_enqueue_rt_command(mpg_select);
                     break;
 #endif
 
