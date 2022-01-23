@@ -26,6 +26,7 @@
 // Configuration
 // Uncomment to enable, for some a value > 1 may be assigned, if so the default value is shown.
 
+//#define SAFETY_DOOR_ENABLE 1 // Enable safety door input.
 //#define PLASMA_ENABLE      1 // Plasma/THC plugin.
 //#define VFD_ENABLE         1 // Set to 1 or 2 for Huanyang VFD spindle. More here https://github.com/grblHAL/Plugins_spindle
 //#define MODBUS_ENABLE      1 // Set to 1 for auto direction, 2 for direction signal on auxillary output pin.
