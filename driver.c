@@ -1502,7 +1502,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "220111";
+    hal.driver_version = "220216";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1600,10 +1600,6 @@ bool driver_init (void)
     hal.driver_cap.control_pull_up = On;
     hal.driver_cap.limits_pull_up = On;
     hal.driver_cap.probe_pull_up = On;
-#if MPG_MODE == 1
-    if(hal.driver_cap.mpg_mode = stream_mpg_register(serial2Init(115200), false, NULL))
-        protocol_enqueue_rt_command(mpg_enable);
-#endif
 
     uint32_t i;
     input_signal_t *input;
@@ -1638,6 +1634,20 @@ bool driver_init (void)
 
 #ifdef HAS_IOPORTS
     ioports_init(&aux_inputs, &aux_outputs);
+#endif
+
+#if MPG_MODE == 1
+  #if KEYPAD_ENABLE == 2
+    if((hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL), false, keypad_enqueue_keycode)))
+        protocol_enqueue_rt_command(mpg_enable);
+  #else
+    if((hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL), false, NULL)))
+        protocol_enqueue_rt_command(mpg_enable);
+  #endif
+#elif MPG_MODE == 2
+    hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL), false, keypad_enqueue_keycode);
+#elif KEYPAD_ENABLE == 2
+    stream_open_instance(KEYPAD_STREAM, 115200, keypad_enqueue_keycode);
 #endif
 
 #include "grbl/plugins_init.h"

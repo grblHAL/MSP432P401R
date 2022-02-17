@@ -26,12 +26,15 @@
 // Configuration
 // Uncomment to enable, for some a value > 1 may be assigned, if so the default value is shown.
 
-//#define SAFETY_DOOR_ENABLE 1 // Enable safety door input.
+#define SAFETY_DOOR_ENABLE 1 // Enable safety door input.
 //#define PLASMA_ENABLE      1 // Plasma/THC plugin.
 //#define VFD_ENABLE         1 // Set to 1 or 2 for Huanyang VFD spindle. More here https://github.com/grblHAL/Plugins_spindle
 //#define MODBUS_ENABLE      1 // Set to 1 for auto direction, 2 for direction signal on auxillary output pin.
-//#define MPG_ENABLE         1 // Enable MPG interface. Requires serial port and one handshake pin.
-//#define KEYPAD_ENABLE      1 // Set to 1 for I2C keypad, 2 for other input such as serial data
+//#define MPG_ENABLE         1 // Enable MPG interface. Requires serial port and one handshake pin unless
+                               // KEYPAD_ENABLE is set to 2 when mode switching is done by the CMD_MPG_MODE_TOGGLE (0x8B)
+                               // command character. Set both MPG_ENABLE and KEYPAD_ENABLE to 2 to use a handshake pin anyway.
+//#define KEYPAD_ENABLE      1 // Set to 1 for I2C keypad, 2 for other input such as serial data. If KEYPAD_ENABLE is set to 2
+                               // and MPG_ENABLE is uncommented then a serial stream is shared with the MPG.
 //#define TRINAMIC_ENABLE 2130 // Trinamic TMC2130 stepper driver support. NOTE: work in progress.
 //#define TRINAMIC_ENABLE 5160 // Trinamic TMC5160 stepper driver support. NOTE: work in progress.
 //#define TRINAMIC_I2C       0 // Trinamic I2C - SPI bridge interface.
