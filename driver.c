@@ -55,6 +55,40 @@ typedef struct {
     input_signal_t *signal[DEBOUNCE_QUEUE];
 } debounce_queue_t;
 
+#if (!VFD_SPINDLE || N_SPINDLE > 1) && defined(SPINDLE_ENABLE_PIN)
+
+#define PWM_SPINDLE
+
+static bool pwmEnabled = false;
+static spindle_pwm_t spindle_pwm;
+static void spindle_set_speed (uint_fast16_t pwm_value);
+
+#ifdef SPINDLE_RPM_CONTROLLED
+
+typedef enum {
+    PIDState_Disabled = 0,
+    PIDState_Pending,
+    PIDState_Active,
+} pid_state_t;
+
+// PID data for closed loop spindle RPM control
+typedef struct {
+    pid_state_t pid_state;
+    pidf_t pid;
+    bool pid_enabled;
+    float rpm;
+} spindle_control_t;
+
+static volatile uint32_t pid_count = 0;
+static spindle_control_t spindle_control = { .pid_state = PIDState_Disabled, .pid = {0}};
+
+#endif
+
+
+#elif defined(SPINDLE_RPM_CONTROLLED)
+#undef SPINDLE_RPM_CONTROLLED
+#endif
+
 static periph_signal_t *periph_pins = NULL;
 
 static input_signal_t inputpin[] = {
@@ -160,8 +194,10 @@ static output_signal_t outputpin[] = {
     { .id = Output_StepperEnableC,  .port = C_ENABLE_PORT,          .pin = C_ENABLE_PIN,            .group = PinGroup_StepperEnable, },
 #endif
 #endif
+#ifdef PWM_SPINDLE
     { .id = Output_SpindleOn,       .port = SPINDLE_ENABLE_PORT,    .pin = SPINDLE_ENABLE_PIN,      .group = PinGroup_SpindleControl },
     { .id = Output_SpindleDir,      .port = SPINDLE_DIRECTION_PORT, .pin = SPINDLE_DIRECTION_PIN,   .group = PinGroup_SpindleControl },
+#endif
     { .id = Output_CoolantFlood,    .port = COOLANT_FLOOD_PORT,     .pin = COOLANT_FLOOD_PIN,       .group = PinGroup_Coolant },
     { .id = Output_CoolantMist,     .port = COOLANT_MIST_PORT,      .pin = COOLANT_MIST_PIN,        .group = PinGroup_Coolant },
 #if TRINAMIC_ENABLE == 2130
@@ -196,36 +232,6 @@ static spindle_encoder_t spindle_encoder = {
 };
 static spindle_sync_t spindle_tracker;
 static delay_t delay = { .ms = 1, .callback = NULL }; // NOTE: initial ms set to 1 for "resetting" systick timer on startup
-
-#if !VFD_SPINDLE
-static bool pwmEnabled = false;
-static spindle_pwm_t spindle_pwm;
-
-#ifdef SPINDLE_RPM_CONTROLLED
-
-typedef enum {
-    PIDState_Disabled = 0,
-    PIDState_Pending,
-    PIDState_Active,
-} pid_state_t;
-
-// PID data for closed loop spindle RPM control
-typedef struct {
-    pid_state_t pid_state;
-    pidf_t pid;
-    bool pid_enabled;
-    float rpm;
-} spindle_control_t;
-
-static volatile uint32_t pid_count = 0;
-static spindle_control_t spindle_control = { .pid_state = PIDState_Disabled, .pid = {0}};
-
-#endif
-
-static void spindle_set_speed (uint_fast16_t pwm_value);
-#else
-#undef SPINDLE_RPM_CONTROLLED
-#endif
 
 static probe_state_t probe = {
     .connected = On
@@ -606,15 +612,14 @@ inline static float spindle_calc_rpm (uint32_t tpp)
     return spindle_encoder.rpm_factor / (float)tpp;
 }
 
-#if !VFD_SPINDLE
+#ifdef PWM_SPINDLE
 
 // Static spindle (off, on cw & on ccw)
 
 inline static void spindle_off (void)
 {
     BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = settings.spindle.invert.on;
-    if(hal.driver_cap.spindle_dir)
-        BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = settings.spindle.invert.ccw;
+    BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = settings.spindle.invert.ccw;
 }
 
 inline static void spindle_on (void)
@@ -625,8 +630,7 @@ inline static void spindle_on (void)
 
 inline static void spindle_dir (bool ccw)
 {
-    if(hal.driver_cap.spindle_dir)
-        BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = ccw ^ settings.spindle.invert.ccw;
+    BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = ccw ^ settings.spindle.invert.ccw;
 }
 
 // Start or stop spindle
@@ -668,14 +672,7 @@ static void spindle_set_speed (uint_fast16_t pwm_value)
     }
 }
 
-#ifdef SPINDLE_PWM_DIRECT
-
-static uint_fast16_t spindleGetPWM (float rpm)
-{
-    return spindle_compute_pwm_value(&spindle_pwm, rpm, false);
-}
-
-#else
+#ifdef SPINDLE_RPM_CONTROLLED
 
 static void spindleUpdateRPM (float rpm)
 {
@@ -687,6 +684,13 @@ static void spindleUpdateRPM (float rpm)
         spindle_data.rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
     }
     spindle_data.rpm_programmed = spindle_data.rpm = rpm;
+}
+
+#else
+
+static uint_fast16_t spindleGetPWM (float rpm)
+{
+    return spindle_compute_pwm_value(&spindle_pwm, rpm, false);
 }
 
 #endif
@@ -733,12 +737,11 @@ static void spindleSetStateVariable (spindle_state_t state, float rpm)
 static spindle_state_t spindleGetState (void)
 {
     float rpm = spindleGetData(SpindleData_RPM)->rpm;
-    spindle_state_t state = {0};
+    spindle_state_t state = {settings.spindle.invert.mask};
 
 //    state.on = (SPINDLE_ENABLE_PORT->IN & SPINDLE_ENABLE_BIT) != 0;
     state.on = BITBAND_PERI(SPINDLE_ENABLE_PORT->IN, SPINDLE_ENABLE_PIN);
-    if(hal.driver_cap.spindle_dir)
-        state.ccw = BITBAND_PERI(SPINDLE_DIRECTION_PORT->IN, SPINDLE_DIRECTION_PIN);
+    state.ccw = BITBAND_PERI(SPINDLE_DIRECTION_PORT->IN, SPINDLE_DIRECTION_PIN);
     state.value ^= settings.spindle.invert.mask;
     if(pwmEnabled)
         state.on = On;
@@ -773,7 +776,40 @@ inline static void spindle_rpm_pid (uint32_t tpp)
 
 #endif
 
-#endif // VFD_SPINDLE
+bool spindleConfig (void)
+{
+    if((hal.spindle.cap.variable = spindle_precompute_pwm_values(&spindle_pwm, 12000000UL / (settings.spindle.pwm_freq > 200.0f ? 2 : 16)))) {
+
+        hal.spindle.set_state = spindleSetStateVariable;
+
+        if(settings.spindle.pwm_freq > 200.0f)
+            SPINDLE_PWM_TIMER->CTL &= ~TIMER_A_CTL_ID__8;
+        else
+            SPINDLE_PWM_TIMER->CTL |= TIMER_A_CTL_ID__8;
+
+        SPINDLE_PWM_TIMER->CCR[0] = spindle_pwm.period;
+        SPINDLE_PWM_TIMER->CCTL[2] = settings.spindle.invert.pwm ? TIMER_A_CCTLN_OUT : 0;   // Set PWM output according to invert setting and
+        SPINDLE_PWM_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC0|TIMER_A_CTL_MC1;          // start PWM timer (with no pulse output)
+    }
+
+    hal.spindle.cap.at_speed = hal.spindle.cap.variable && settings.spindle.ppr > 0;
+    hal.spindle.set_state = hal.spindle.cap.variable ? spindleSetStateVariable : spindleSetState;
+
+  #ifdef SPINDLE_RPM_CONTROLLED
+
+    if((spindle_control.pid_enabled = hal.spindle.get_data && (settings.spindle.pid.p_gain != 0.0) || pidf_config_changed(&spindle_control.pid, &settings.spindle.pid))) {
+        hal.spindle.set_state((spindle_state_t){0}, 0.0f);
+        pidf_init(&spindle_control.pid, &settings.spindle.pid);
+  //      spindle_encoder.pid.cfg.i_max_error = spindle_encoder.pid.cfg.i_max_error / settings->spindle.pid.i_gain; // Makes max value sensible?
+    } else
+        spindle_control.pid_state = PIDState_Disabled;
+
+  #endif
+
+    return true;
+}
+
+#endif // PWM_SPINDLE
 
 static spindle_data_t *spindleGetData (spindle_data_request_t request)
 {
@@ -967,34 +1003,7 @@ uint32_t getElapsedTicks (void)
 // Configure perhipherals when settings are initialized or changed
 void settings_changed (settings_t *settings)
 {
-#if !VFD_SPINDLE
-
-    if((hal.driver_cap.variable_spindle = settings->spindle.rpm_min < settings->spindle.rpm_max)) {
-        if(settings->spindle.pwm_freq > 200.0f)
-            SPINDLE_PWM_TIMER->CTL &= ~TIMER_A_CTL_ID__8;
-        else
-            SPINDLE_PWM_TIMER->CTL |= TIMER_A_CTL_ID__8;
-
-        spindle_precompute_pwm_values(&spindle_pwm, 12000000UL / (settings->spindle.pwm_freq > 200.0f ? 2 : 16));
-    }
-
-    hal.driver_cap.spindle_at_speed = hal.driver_cap.variable_spindle && settings->spindle.ppr > 0;
-    hal.spindle.set_state = hal.driver_cap.variable_spindle ? spindleSetStateVariable : spindleSetState;
-
-  #ifdef SPINDLE_RPM_CONTROLLED
-
-    if((spindle_control.pid_enabled = hal.spindle.get_data && (settings->spindle.pid.p_gain != 0.0) || pidf_config_changed(&spindle_control.pid, &settings->spindle.pid))) {
-        spindle_set_state((spindle_state_t){0}, 0.0f);
-        pidf_init(&spindle_control.pid, &settings->spindle.pid);
-  //      spindle_encoder.pid.cfg.i_max_error = spindle_encoder.pid.cfg.i_max_error / settings->spindle.pid.i_gain; // Makes max value sensible?
-    } else
-        spindle_control.pid_state = PIDState_Disabled;
-
-  #endif
-
-#endif
-
-    if((hal.spindle.get_data = (hal.driver_cap.spindle_at_speed = settings->spindle.ppr > 0) ? spindleGetData : NULL) &&
+    if((hal.spindle.get_data = (hal.spindle.cap.at_speed = settings->spindle.ppr > 0) ? spindleGetData : NULL) &&
          (spindle_encoder.ppr != settings->spindle.ppr || pidf_config_changed(&spindle_tracker.pid, &settings->position.pid))) {
 
         hal.spindle.reset_data = spindleDataReset;
@@ -1005,7 +1014,7 @@ void settings_changed (settings_t *settings)
         float timer_resolution = 1.0f / (float)(SystemCoreClock / 16);
 
         spindle_tracker.min_cycles_per_tick = hal.f_step_timer / 1000000UL * (uint32_t)ceilf(settings->steppers.pulse_microseconds * 2.0f + settings->steppers.pulse_delay_microseconds);
-        spindle_set_state((spindle_state_t){0}, 0.0f);
+        hal.spindle.set_state((spindle_state_t){0}, 0.0f);
         spindle_encoder.ppr = settings->spindle.ppr;
         spindle_encoder.tics_per_irq = 4;
         spindle_encoder.pulse_distance = 1.0f / spindle_encoder.ppr;
@@ -1027,13 +1036,9 @@ void settings_changed (settings_t *settings)
 
         stepperEnable(settings->steppers.deenergize);
 
-#if !VFD_SPINDLE
-
-        if(hal.driver_cap.variable_spindle) {
-            SPINDLE_PWM_TIMER->CCR[0] = spindle_pwm.period;
-            SPINDLE_PWM_TIMER->CCTL[2] = settings->spindle.invert.pwm ? TIMER_A_CCTLN_OUT : 0;  // Set PWM output according to invert setting and
-            SPINDLE_PWM_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC0|TIMER_A_CTL_MC1;          // start PWM timer (with no pulse output)
-        }
+#ifdef PWM_SPINDLE
+        if(hal.spindle.get_state == spindleGetState)
+            spindleConfig();
 #endif
 
         pulse_length = (uint16_t)(12.0f * (settings->steppers.pulse_microseconds - STEP_PULSE_LATENCY));
@@ -1383,7 +1388,7 @@ static bool driver_setup (settings_t *settings)
 
  // Spindle init
 
-#if !VFD_SPINDLE
+#ifdef PWM_SPINDLE
 
     SPINDLE_PWM_PORT->DIR |= (1 << SPINDLE_PWM_PIN);
     SPINDLE_PWM_PORT->SEL1 &= ~(1 << SPINDLE_PWM_PIN);
@@ -1502,7 +1507,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "220216";
+    hal.driver_version = "220325";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1527,17 +1532,6 @@ bool driver_init (void)
     hal.probe.configure = probeConfigure;
     hal.probe.get_state = probeGetState;
     hal.probe.connected_toggle = probeConnectedToggle;
-
-#if !VFD_SPINDLE
-    hal.spindle.set_state = spindleSetState;
-    hal.spindle.get_state = spindleGetState;
-  #ifdef SPINDLE_PWM_DIRECT
-    hal.spindle.get_pwm = spindleGetPWM;
-    hal.spindle.update_pwm = spindle_set_speed;
-  #else
-    hal.spindle.update_rpm = spindleUpdateRPM;
-  #endif
-#endif
 
     hal.control.get_state = systemGetState;
 
@@ -1570,6 +1564,31 @@ bool driver_init (void)
     grbl.on_realtime_report = driver_rt_report;
 #endif
 
+#ifdef PWM_SPINDLE
+
+    static const spindle_ptrs_t spindle = {
+ #ifdef SPINDLE_DIRECTION_PIN
+        .cap.direction = On,
+ #endif
+        .cap.laser = On,
+        .cap.variable = On,
+        .cap.pwm_invert = On,
+        .cap.at_speed = On,
+  #ifdef SPINDLE_RPM_CONTROLLED
+        .update_rpm = spindleUpdateRPM,
+  #else
+        .get_pwm = spindleGetPWM,
+        .update_pwm = spindle_set_speed,
+  #endif
+        .config = spindleConfig,
+        .set_state = spindleSetState,
+        .get_state = spindleGetState
+    };
+
+    spindle_register(&spindle, "PWM");
+
+#endif
+
   // driver capabilities, used for announcing and negotiating (with Grbl) driver functionality
 
 #if SAFETY_DOOR_ENABLE
@@ -1583,14 +1602,10 @@ bool driver_init (void)
 #endif
 
     hal.driver_cap.spindle_sync = On;
-#if !VFD_SPINDLE
-    hal.driver_cap.spindle_at_speed = On;
-    hal.driver_cap.spindle_dir = On;
+#ifdef PWM_SPINDLE
   #ifdef SPINDLE_RPM_CONTROLLED
     hal.driver_cap.spindle_pid = On;
   #endif
-    hal.driver_cap.variable_spindle = On;
-    hal.driver_cap.spindle_pwm_invert = On;
     hal.driver_cap.spindle_pwm_linearization = On;
 #endif
     hal.driver_cap.mist_control = On;
