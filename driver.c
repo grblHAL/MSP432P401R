@@ -1048,8 +1048,6 @@ void settings_changed (settings_t *settings)
 
     if(IOInitDone) {
 
-        stepperEnable(settings->steppers.deenergize);
-
 #ifdef PWM_SPINDLE
         if(hal.spindle.get_state == spindleGetState)
             spindleConfig();
@@ -1521,7 +1519,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "220703";
+    hal.driver_version = "220710";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
