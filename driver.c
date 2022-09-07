@@ -29,7 +29,7 @@
 #include "driver.h"
 #include "serial.h"
 
-#include "grbl/limits.h"
+#include "grbl/machine_limits.h"
 #include "grbl/spindle_sync.h"
 #include "grbl/state_machine.h"
 #include "grbl/motor_pins.h"
@@ -1277,7 +1277,7 @@ static char *port2char (void *port, uint8_t pin)
     return "?";
 }
 
-static void enumeratePins (bool low_level, pin_info_ptr pin_info)
+static void enumeratePins (bool low_level, pin_info_ptr pin_info, void *data)
 {
     static xbar_t pin = {0};
     uint32_t i = sizeof(inputpin) / sizeof(input_signal_t);
@@ -1292,7 +1292,7 @@ static void enumeratePins (bool low_level, pin_info_ptr pin_info)
         pin.mode.pwm = pin.group == PinGroup_SpindlePWM;
         pin.description = inputpin[i].description;
 
-        pin_info(&pin);
+        pin_info(&pin, data);
     };
 
     pin.mode.mask = 0;
@@ -1305,7 +1305,7 @@ static void enumeratePins (bool low_level, pin_info_ptr pin_info)
         pin.port = low_level ? (void *)outputpin[i].port : (void *)port2char(outputpin[i].port, outputpin[i].pin);
         pin.description = outputpin[i].description;
 
-        pin_info(&pin);
+        pin_info(&pin, data);
     };
 
     periph_signal_t *ppin = periph_pins;
@@ -1318,10 +1318,8 @@ static void enumeratePins (bool low_level, pin_info_ptr pin_info)
         pin.mode = ppin->pin.mode;
         pin.description = ppin->pin.description;
 
-        pin_info(&pin);
-
-        ppin = ppin->next;
-    } while(ppin);
+        pin_info(&pin, data);
+    } while(ppin = ppin->next);
 }
 
 void registerPeriphPin (const periph_pin_t *pin)
@@ -1519,7 +1517,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "220710";
+    hal.driver_version = "220907";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1680,7 +1678,7 @@ bool driver_init (void)
 #include "grbl/plugins_init.h"
 
     // no need to move version check before init - compiler will fail any signature mismatch for existing entries
-    return hal.version == 9;
+    return hal.version == 10;
 }
 
 /* interrupt handlers */
