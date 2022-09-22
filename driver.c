@@ -807,7 +807,7 @@ bool spindleConfig (void)
 
     hal.spindle.cap.at_speed = hal.spindle.cap.variable && settings.spindle.ppr > 0;
 
-    spindle_update_caps(hal.spindle.cap.variable);
+    spindle_update_caps(hal.spindle.cap.variable ? &spindle_pwm : NULL);
 
   #ifdef SPINDLE_RPM_CONTROLLED
 
@@ -1517,7 +1517,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "220907";
+    hal.driver_version = "220922";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
