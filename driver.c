@@ -122,6 +122,12 @@ static input_signal_t inputpin[] = {
   , { .id = Input_LimitsOverride, .port = LIMITS_OVERRIDE_PORT, .pin = LIMITS_OVERRIDE_PIN, .group = PinGroup_Limit }
 #endif
   , { .id = Input_SpindleIndex,   .port = RPM_INDEX_PORT,     .pin = RPM_INDEX_PIN,       .group = PinGroup_QEI_Index }
+#if TRINAMIC_ENABLE == 2130
+#if TRINAMIC_I2C
+    { .id = Input_MotorWarning,   .port = TRINAMIC_WARN_IRQ_PORT, .pin = TRINAMIC_WARN_IRQ_PIN,   .group = PinGroup_Motor_Warning },
+#endif
+    { .id = Input_MotorFault,     .port = TRINAMIC_DIAG_IRQ_PORT, .pin = TRINAMIC_DIAG_IRQ_PIN,   .group = PinGroup_Motor_Fault },
+#endif
 // Aux input pins must be consecutive in this array
 #ifdef AUXINPUT0_PIN
   , { .id = Input_Aux0,           .port = AUXINPUT0_PORT,     .pin = AUXINPUT0_PIN,       .group = PinGroup_AuxInput }
@@ -200,11 +206,8 @@ static output_signal_t outputpin[] = {
 #endif
     { .id = Output_CoolantFlood,    .port = COOLANT_FLOOD_PORT,     .pin = COOLANT_FLOOD_PIN,       .group = PinGroup_Coolant },
     { .id = Output_CoolantMist,     .port = COOLANT_MIST_PORT,      .pin = COOLANT_MIST_PIN,        .group = PinGroup_Coolant },
-#if TRINAMIC_ENABLE == 2130
-#if TRINAMIC_I2C
-    { .id = Input_MotorWarning,     .port = TRINAMIC_WARN_IRQ_PORT, .pin = TRINAMIC_WARN_IRQ_PIN,   .group = PinGroup_Motor_Warning },
-#endif
-    { .id = Input_MotorFault,       .port = TRINAMIC_DIAG_IRQ_PORT, .pin = TRINAMIC_DIAG_IRQ_PIN,   .group = PinGroup_Motor_Fault },
+#ifdef RTS_PIN
+    { .id = Output_RTS,             .port = RTS_PORT,               .pin = RTS_PIN,                 .group = PinGroup_UART },
 #endif
 #ifdef AUXOUTPUT0_PORT
     { .id = Output_Aux0,            .port = AUXOUTPUT0_PORT,        .pin = AUXOUTPUT0_PIN,          .group = PinGroup_AuxOutput },
@@ -1517,7 +1520,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "220922";
+    hal.driver_version = "220929";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif

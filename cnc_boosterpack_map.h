@@ -47,8 +47,8 @@
 #undef EEPROM_ENABLE
 
 #define CNC_BOOSTERPACK  1 // Do not change!
-#define I2C_ENABLE       1 // Only change if BoosterPack does not have EEPROM mounted
-#define EEPROM_ENABLE    1 // Only change if BoosterPack does not have EEPROM mounted
+#define I2C_ENABLE       0 // Only change if BoosterPack does not have EEPROM mounted
+#define EEPROM_ENABLE    0 // Only change if BoosterPack does not have EEPROM mounted
 
 #define HAS_IOPORTS
 
@@ -243,5 +243,8 @@
 #define I2C_PORT                I2Cport(I2C_PN)
 #define I2C_INT                 I2CportINT(I2C_PN)
 #define I2C_IRQHandler          I2CportHANDLER(I2C_PN)
+
+//#define RTS_PORT                port(B)
+//#define RTS_PIN                 4
 
 /*EOF*/

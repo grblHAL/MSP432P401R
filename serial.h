@@ -40,9 +40,7 @@
 #define XOFFOK (ASCII_XON|0x80)
 #define RX_BUFFER_HWM 900
 #define RX_BUFFER_LWM 300
-//#define RTS_PORT P1
-#define RTS_PIN  4
-#define RTS_BIT (1<<RTS_PIN)
+
 //#define LINE_BUFFER_SIZE 20
 
 // Define serial port pins and module
@@ -54,9 +52,6 @@
 #define SERIAL_PORT P1
 #define SERIAL_RX_PIN 2
 #define SERIAL_TX_PIN 3
-#define SERIAL_RTS_PORT P1
-#define SERIAL_RTS_PIN 4
-#define SERIAL_RTS_BIT (1<<SERIAL_RTS_PIN)
 
 #if KEYPAD_ENABLE == 2 || MPG_ENABLE || MODBUS_ENABLE
 #define SERIAL2_MOD A2
