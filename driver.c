@@ -736,8 +736,9 @@ static void spindleSetStateVariable (spindle_state_t state, float rpm)
 #endif
 
     if(settings.spindle.at_speed_tolerance > 0.0f) {
-        spindle_data.rpm_low_limit = rpm / (1.0f + settings.spindle.at_speed_tolerance);
-        spindle_data.rpm_high_limit = rpm * (1.0f + settings.spindle.at_speed_tolerance);
+        float tolerance = rpm * settings.spindle.at_speed_tolerance / 100.0f;
+        spindle_data.rpm_low_limit = rpm - tolerance;
+        spindle_data.rpm_high_limit = rpm + tolerance;
     }
     spindle_data.rpm_programmed = spindle_data.rpm = rpm;
 }
@@ -1440,7 +1441,7 @@ static bool driver_setup (settings_t *settings)
     atc_init();
 #endif
 
-    IOInitDone = settings->version == 21;
+    IOInitDone = settings->version == 22;
 
     hal.settings_changed(settings);
     hal.stepper.go_idle(true);
@@ -1520,7 +1521,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "220929";
+    hal.driver_version = "230124";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
