@@ -397,7 +397,7 @@ static status_code_t atc_tool_change (parser_state_t *gc_state)
 
     // Restore coolant and spindle state
     coolant_sync(gc_state->modal.coolant);
-    spindle_restore(gc_state->modal.spindle, gc_state->spindle.rpm);
+    spindle_restore(spindle_get(0), gc_state->modal.spindle, gc_state->spindle.rpm);
 
     return Status_OK;
 }

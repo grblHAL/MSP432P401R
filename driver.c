@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2022 Terje Io
+  Copyright (c) 2017-2023 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -43,6 +43,10 @@
 #include "eeprom/eeprom.h"
 #endif
 
+#if KEYPAD_ENABLE
+#include "keypad/keypad.h"
+#endif
+
 #if ATC_ENABLE
 #include "atc.h"
 #endif
@@ -55,11 +59,12 @@ typedef struct {
     input_signal_t *signal[DEBOUNCE_QUEUE];
 } debounce_queue_t;
 
-#if (!VFD_SPINDLE || N_SPINDLE > 1) && defined(SPINDLE_ENABLE_PIN)
+#if DRIVER_SPINDLE_ENABLE && defined(SPINDLE_ENABLE_PIN)
 
 #define PWM_SPINDLE
 
 static bool pwmEnabled = false;
+static spindle_id_t spindle_id = -1;
 static spindle_pwm_t spindle_pwm;
 static void spindle_set_speed (uint_fast16_t pwm_value);
 
@@ -787,11 +792,14 @@ inline static void spindle_rpm_pid (uint32_t tpp)
 
 #endif
 
-bool spindleConfig (void)
+bool spindleConfig (spindle_ptrs_t *spindle)
 {
-    if((hal.spindle.cap.variable = !settings.spindle.flags.pwm_disable && spindle_precompute_pwm_values(&spindle_pwm, 12000000UL / (settings.spindle.pwm_freq > 200.0f ? 2 : 16)))) {
+    if(spindle == NULL)
+        return false;
 
-        hal.spindle.set_state = spindleSetStateVariable;
+    if((spindle->cap.variable = !settings.spindle.flags.pwm_disable && spindle_precompute_pwm_values(spindle, &spindle_pwm, 12000000UL / (settings.spindle.pwm_freq > 200.0f ? 2 : 16)))) {
+
+        spindle->set_state = spindleSetStateVariable;
 
         if(settings.spindle.pwm_freq > 200.0f)
             SPINDLE_PWM_TIMER->CTL &= ~TIMER_A_CTL_ID__8;
@@ -802,21 +810,21 @@ bool spindleConfig (void)
         SPINDLE_PWM_TIMER->CCTL[2] = settings.spindle.invert.pwm ? TIMER_A_CCTLN_OUT : 0;   // Set PWM output according to invert setting and
         SPINDLE_PWM_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC0|TIMER_A_CTL_MC1;          // start PWM timer (with no pulse output)
 
-        hal.spindle.set_state = spindleSetStateVariable;
+        spindle->set_state = spindleSetStateVariable;
     } else {
         if(pwmEnabled)
-            hal.spindle.set_state((spindle_state_t){0}, 0.0f);
-        hal.spindle.set_state = spindleSetState;
+            spindle->set_state((spindle_state_t){0}, 0.0f);
+        spindle->set_state = spindleSetState;
     }
 
-    hal.spindle.cap.at_speed = hal.spindle.cap.variable && settings.spindle.ppr > 0;
+    spindle->cap.at_speed = spindle->cap.variable && settings.spindle.ppr > 0;
 
-    spindle_update_caps(hal.spindle.cap.variable ? &spindle_pwm : NULL);
+    spindle_update_caps(spindle, spindle->cap.variable ? &spindle_pwm : NULL);
 
   #ifdef SPINDLE_RPM_CONTROLLED
 
-    if((spindle_control.pid_enabled = hal.spindle.get_data && (settings.spindle.pid.p_gain != 0.0) || pidf_config_changed(&spindle_control.pid, &settings.spindle.pid))) {
-        hal.spindle.set_state((spindle_state_t){0}, 0.0f);
+    if((spindle_control.pid_enabled = spindle->get_data && (settings.spindle.pid.p_gain != 0.0) || pidf_config_changed(&spindle_control.pid, &settings.spindle.pid))) {
+        spindle->set_state((spindle_state_t){0}, 0.0f);
         pidf_init(&spindle_control.pid, &settings.spindle.pid);
   //      spindle_encoder.pid.cfg.i_max_error = spindle_encoder.pid.cfg.i_max_error / settings->spindle.pid.i_gain; // Makes max value sensible?
     } else
@@ -1019,32 +1027,9 @@ uint32_t getElapsedTicks (void)
 }
 
 // Configure perhipherals when settings are initialized or changed
-void settings_changed (settings_t *settings)
+void settings_changed (settings_t *settings, settings_changed_flags_t changed)
 {
-    if((hal.spindle.get_data = (hal.spindle.cap.at_speed = settings->spindle.ppr > 0) ? spindleGetData : NULL) &&
-         (spindle_encoder.ppr != settings->spindle.ppr || pidf_config_changed(&spindle_tracker.pid, &settings->position.pid))) {
-
-        hal.spindle.reset_data = spindleDataReset;
-        hal.spindle.set_state((spindle_state_t){0}, 0.0f);
-
-        pidf_init(&spindle_tracker.pid, &settings->position.pid);
-
-        float timer_resolution = 1.0f / (float)(SystemCoreClock / 16);
-
-        spindle_tracker.min_cycles_per_tick = hal.f_step_timer / 1000000UL * (uint32_t)ceilf(settings->steppers.pulse_microseconds * 2.0f + settings->steppers.pulse_delay_microseconds);
-        hal.spindle.set_state((spindle_state_t){0}, 0.0f);
-        spindle_encoder.ppr = settings->spindle.ppr;
-        spindle_encoder.tics_per_irq = 4;
-        spindle_encoder.pulse_distance = 1.0f / spindle_encoder.ppr;
-        spindle_encoder.maximum_tt = (uint32_t)(0.25f / timer_resolution) * spindle_encoder.tics_per_irq; // 250 mS
-        spindle_encoder.rpm_factor = 60.0f / ((timer_resolution * (float)spindle_encoder.ppr));
-        BITBAND_PERI(RPM_INDEX_PORT->IES, RPM_INDEX_PIN) = 1;
-        BITBAND_PERI(RPM_INDEX_PORT->IE, RPM_INDEX_PIN) = 1;
-        spindleDataReset();
-    }
-
-    if(!hal.spindle.get_data)
-        BITBAND_PERI(RPM_INDEX_PORT->IE, RPM_INDEX_PIN) = 0;
+    spindle_ptrs_t *spindle = spindle_get(spindle_id);
 
 #if USE_STEPDIR_MAP
     stepdirmap_init(settings);
@@ -1053,9 +1038,38 @@ void settings_changed (settings_t *settings)
     if(IOInitDone) {
 
 #ifdef PWM_SPINDLE
-        if(hal.spindle.get_state == spindleGetState)
-            spindleConfig();
+        if(changed.spindle) {
+            spindleConfig(spindle_get_hal(spindle_id, SpindleHAL_Configured));
+            if(spindle_id == spindle_get_default())
+                spindle_select(spindle_id);
+        }
 #endif
+
+        if((hal.spindle_data.get = settings->spindle.ppr > 0 ? spindleGetData : NULL) &&
+             (spindle_encoder.ppr != settings->spindle.ppr || pidf_config_changed(&spindle_tracker.pid, &settings->position.pid))) {
+
+            hal.spindle_data.reset = spindleDataReset;
+            if(spindle_get(0))
+                spindle_get(0)->set_state((spindle_state_t){0}, 0.0f);
+
+            pidf_init(&spindle_tracker.pid, &settings->position.pid);
+
+            float timer_resolution = 1.0f / (float)(SystemCoreClock / 16);
+
+            spindle_tracker.min_cycles_per_tick = hal.f_step_timer / 1000000UL * (uint32_t)ceilf(settings->steppers.pulse_microseconds * 2.0f + settings->steppers.pulse_delay_microseconds);
+            spindle->set_state((spindle_state_t){0}, 0.0f);
+            spindle_encoder.ppr = settings->spindle.ppr;
+            spindle_encoder.tics_per_irq = 4;
+            spindle_encoder.pulse_distance = 1.0f / spindle_encoder.ppr;
+            spindle_encoder.maximum_tt = (uint32_t)(0.25f / timer_resolution) * spindle_encoder.tics_per_irq; // 250 mS
+            spindle_encoder.rpm_factor = 60.0f / ((timer_resolution * (float)spindle_encoder.ppr));
+            BITBAND_PERI(RPM_INDEX_PORT->IES, RPM_INDEX_PIN) = 1;
+            BITBAND_PERI(RPM_INDEX_PORT->IE, RPM_INDEX_PIN) = 1;
+            spindleDataReset();
+        }
+
+        if(!hal.spindle_data.get)
+            BITBAND_PERI(RPM_INDEX_PORT->IE, RPM_INDEX_PIN) = 0;
 
         pulse_length = (uint16_t)(12.0f * (settings->steppers.pulse_microseconds - STEP_PULSE_LATENCY));
 
@@ -1443,9 +1457,7 @@ static bool driver_setup (settings_t *settings)
 
     IOInitDone = settings->version == 22;
 
-    hal.settings_changed(settings);
-    hal.stepper.go_idle(true);
-    hal.coolant.set_state((coolant_state_t){0});
+    hal.settings_changed(settings, (settings_changed_flags_t){0});
 
     return IOInitDone;
 }
@@ -1521,7 +1533,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "230124";
+    hal.driver_version = "230201";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1599,11 +1611,25 @@ bool driver_init (void)
         .get_state = spindleGetState
     };
 
-    spindle_register(&spindle, "PWM");
+    spindle_id = spindle_register(&spindle, "PWM");
+
+#else
+
+    static const spindle_ptrs_t spindle = {
+ #ifdef SPINDLE_DIRECTION_PIN
+        .cap.direction = On,
+ #endif
+        .set_state = spindleSetState,
+        .get_state = spindleGetState
+    };
+
+    spindle_id = spindle_register(&spindle, "Basic");
 
 #endif
 
-  // driver capabilities, used for announcing and negotiating (with Grbl) driver functionality
+    serialRegisterStreams();
+
+  // driver capabilities, used for announcing and negotiating (with the core) driver functionality
 
 #if SAFETY_DOOR_ENABLE
     hal.signals_cap.safety_door_ajar = On;
