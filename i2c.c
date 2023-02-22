@@ -3,7 +3,7 @@
 
   Part of grblHAL driver for MSP432P401R
 
-  Copyright (c) 2018-2021 Terje Io
+  Copyright (c) 2018-2023 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -48,9 +48,7 @@ typedef struct {
     volatile i2c_state_t state;
     uint8_t count;
     uint8_t *data;
-#if KEYPAD_ENABLE == 1
     keycode_callback_ptr keycode_callback;
-#endif
     uint8_t buffer[8];
 } i2c_tr_trans_t;
 
@@ -59,7 +57,7 @@ static i2c_tr_trans_t i2c;
 #define i2cIsBusy ((i2c.state != I2CState_Idle) || (I2C_PORT->CTLW0 & EUSCI_B_CTLW0_TXSTP))
 
 // Power on self test, attempt to release bus if stuck.
-bool I2CPOS (void)
+bool i2c_selftest (void)
 {
     // BIT4 = SDA, BIT5 = SCL
 
@@ -95,6 +93,24 @@ bool I2CPOS (void)
     return (P6->IN & (BIT4|BIT5)) == (BIT4|BIT5);
 }
 
+bool i2c_send (uint_fast16_t i2cAddr, uint8_t *buf, size_t size, bool block)
+{
+    while(i2cIsBusy);
+
+    i2c.count = size;
+    i2c.data  = buf;
+    i2c.state = size == 1 ? I2CState_SendLast : (size == 2 ? I2CState_SendNext : I2CState_SendNext);
+    I2C_PORT->I2CSA = i2cAddr;
+    I2C_PORT->IFG &= ~(EUSCI_B_IFG_TXIFG0|EUSCI_B_IFG_RXIFG0);          // Clear interrupt flags
+    I2C_PORT->IE |= EUSCI_B_IE_TXIE0;
+    I2C_PORT->CTLW0 |= EUSCI_B_CTLW0_TR|EUSCI_B_CTLW0_TXSTT;
+
+    if(block)
+        while(i2cIsBusy);
+
+    return true;
+}
+
 #if ATC_ENABLE || KEYPAD_ENABLE == 1
 
 static uint8_t *I2C_Receive (uint32_t i2cAddr, uint32_t bytes, bool block)
@@ -124,7 +140,7 @@ static uint8_t *I2C_Receive (uint32_t i2cAddr, uint32_t bytes, bool block)
 
 #if (TRINAMIC_ENABLE == 2130 && TRINAMIC_I2C) || ATC_ENABLE
 
-static void I2C_Send (uint32_t i2cAddr, uint8_t bytes, bool block)
+void I2C_Send (uint32_t i2cAddr, uint8_t bytes, bool block)
 {
     while(i2cIsBusy);
 
@@ -231,9 +247,7 @@ nvs_transfer_result_t i2c_nvs_transfer (nvs_transfer_t *i2c, bool read)
 
 #endif
 
-#if KEYPAD_ENABLE == 1
-
-void I2C_GetKeycode (uint32_t i2cAddr, keycode_callback_ptr callback)
+void i2c_get_keycode (uint_fast16_t i2cAddr, keycode_callback_ptr callback)
 {
     while(i2cIsBusy);
 
@@ -241,8 +255,6 @@ void I2C_GetKeycode (uint32_t i2cAddr, keycode_callback_ptr callback)
 
     I2C_Receive(i2cAddr, 1, false);
 }
-
-#endif
 
 #if TRINAMIC_ENABLE && TRINAMIC_I2C
 
@@ -337,7 +349,7 @@ void i2c_init (void)
 
     P6->SEL0 |= (1<<I2C_SCL_PIN)|(1<<I2C_SDA_PIN);                                                          // Assign I2C pins to USCI_B1
 
-    if(!I2CPOS()) {
+    if(!i2c_selftest()) {
         protocol_enqueue_rt_command(pos_failed);
         system_raise_alarm(Alarm_SelftestFailed);
         return;
@@ -350,7 +362,7 @@ void i2c_init (void)
 //    I2C_PORT->IE |= EUSCI_B_IE_NACKIE;                                              // NACK interrupt enable
 
     NVIC_EnableIRQ(I2C_INT);       // Enable I2C interrupt and
-    NVIC_SetPriority(I2C_INT, 1);  // set priority
+    NVIC_SetPriority(I2C_INT, 4);  // set priority
 
     static const periph_pin_t scl = {
         .function = Output_SCK,
@@ -451,12 +463,10 @@ void I2C_IRQHandler (void)
             i2c.count = 0;
             i2c.state = I2CState_Idle;
             I2C_PORT->IE &= ~(EUSCI_B_IE_TXIE0|EUSCI_B_IE_RXIE0);
-#if KEYPAD_ENABLE == 1
             if(i2c.keycode_callback) {
                 i2c.keycode_callback(i2c.data[0]);
                 i2c.keycode_callback = NULL;
             }
-#endif
             break;
     }
 }
