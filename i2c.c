@@ -111,8 +111,6 @@ bool i2c_send (uint_fast16_t i2cAddr, uint8_t *buf, size_t size, bool block)
     return true;
 }
 
-#if ATC_ENABLE || KEYPAD_ENABLE == 1
-
 static uint8_t *I2C_Receive (uint32_t i2cAddr, uint32_t bytes, bool block)
 {
     while(i2cIsBusy);
@@ -135,8 +133,6 @@ static uint8_t *I2C_Receive (uint32_t i2cAddr, uint32_t bytes, bool block)
 
     return i2c.buffer;
 }
-
-#endif
 
 #if (TRINAMIC_ENABLE == 2130 && TRINAMIC_I2C) || ATC_ENABLE
 
