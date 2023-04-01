@@ -1297,7 +1297,7 @@ static char *port2char (void *port, uint8_t pin)
 
 static void enumeratePins (bool low_level, pin_info_ptr pin_info, void *data)
 {
-    static xbar_t pin = {0};
+    static xbar_t pin = {};
     uint32_t i = sizeof(inputpin) / sizeof(input_signal_t);
 
     pin.mode.input = On;
@@ -1533,7 +1533,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "230201";
+    hal.driver_version = "230331";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
@@ -1640,13 +1640,13 @@ bool driver_init (void)
 #if LIMITS_OVERRIDE_ENABLE
     hal.signals_cap.limits_override = On;
 #endif
-
+    hal.limits_cap = get_limits_cap();
     hal.driver_cap.spindle_sync = On;
 #ifdef PWM_SPINDLE
   #ifdef SPINDLE_RPM_CONTROLLED
     hal.driver_cap.spindle_pid = On;
   #endif
-    hal.driver_cap.spindle_pwm_linearization = On;
+//    hal.driver_cap.spindle_pwm_linearization = On;
 #endif
     hal.driver_cap.mist_control = On;
     hal.driver_cap.software_debounce = On;
