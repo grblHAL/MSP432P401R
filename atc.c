@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2018-2020 Terje Io
+  Copyright (c) 2018-2023 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -185,9 +185,9 @@ static bool spindle_nut (plan_line_data_t *plan_data, float zpos, bool open)
     atc_move(target, plan_data);
 
     // spin up spindle briefely and lock spindle
-    hal.spindle.set_state((spindle_state_t){ .on = On, .ccw = Off }, 100.0f);
+    plan_data->spindle.hal->set_state((spindle_state_t){ .on = On, .ccw = Off }, 100.0f);
     hal.delay_ms(500, NULL);
-    hal.spindle.set_state((spindle_state_t){0}, 0.0f);
+    plan_data->spindle.hal->set_state((spindle_state_t){0}, 0.0f);
     lock_spindle(true);
     do {
         hal.delay_ms(50, NULL);
@@ -257,8 +257,10 @@ static status_code_t atc_tool_change (parser_state_t *gc_state)
         return Status_GCodeToolError;
 
     float angle;
-    plan_line_data_t plan_data = {0};
+    plan_line_data_t plan_data;
     coord_data_t target = {0}, previous;
+
+    plan_data_init(&plan_data);
 
     i2c.addr = ATC_I2C_ADDRESS;
     i2c.count = 2;
@@ -274,7 +276,7 @@ static status_code_t atc_tool_change (parser_state_t *gc_state)
     settings_read_coord_data(CoordinateSystem_G59_3, &offset.values); // G59.3 - fail if not set?
 
     // Stop spindle and coolant
-    hal.spindle.set_state((spindle_state_t){0}, 0.0f);
+    plan_data.spindle.hal->set_state((spindle_state_t){0}, 0.0f);
     hal.coolant.set_state((coolant_state_t){0});
 
     plan_data.feed_rate = 100.0f;
@@ -338,7 +340,7 @@ static status_code_t atc_tool_change (parser_state_t *gc_state)
 
     // Spin up spindle
     protocol_buffer_synchronize();
-    hal.spindle.set_state((spindle_state_t){ .on = On, .ccw = Off }, 100.0f);
+    plan_data.spindle.hal->set_state((spindle_state_t){ .on = On, .ccw = Off }, 100.0f);
     hal.delay_ms(200, NULL);
 
     // Engage tool
@@ -349,7 +351,7 @@ static status_code_t atc_tool_change (parser_state_t *gc_state)
         return Status_Reset;
 
     protocol_buffer_synchronize();
-    hal.spindle.set_state((spindle_state_t){0}, 0.0f);
+    plan_data.spindle.hal->set_state((spindle_state_t){0}, 0.0f);
     hal.delay_ms(200, NULL);
     plan_data.condition.rapid_motion = On;
 
@@ -397,7 +399,7 @@ static status_code_t atc_tool_change (parser_state_t *gc_state)
 
     // Restore coolant and spindle state
     coolant_sync(gc_state->modal.coolant);
-    spindle_restore(spindle_get(0), gc_state->modal.spindle, gc_state->spindle.rpm);
+    spindle_restore(plan_data.spindle.hal, gc_state->modal.spindle.state, gc_state->spindle.rpm);
 
     return Status_OK;
 }
