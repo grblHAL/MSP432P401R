@@ -350,7 +350,7 @@ static void stepperEnable (axes_signals_t enable)
 static void stepperWakeUp (void)
 {
     stepperEnable((axes_signals_t){AXES_BITMASK});
-    STEPPER_TIMER->LOAD = 0x000FFFFFUL;
+    STEPPER_TIMER->LOAD = hal.f_step_timer / 500; // ~2ms delay to allow drivers time to wake up.
     STEPPER_TIMER->CONTROL |= TIMER32_CONTROL_ENABLE|TIMER32_CONTROL_IE;
     spindle_tracker.segment_id = 0;
 }
@@ -1533,7 +1533,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "230331";
+    hal.driver_version = "230511";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
 #endif
