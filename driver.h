@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2021 Terje Io
+  Copyright (c) 2017-2022 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -86,10 +86,6 @@
 #endif
 
 // End configuration
-
-#if MODBUS_ENABLE
-#include "spindle/modbus.h"
-#endif
 
 #if TRINAMIC_ENABLE && CNC_BOOSTERPACK_A4998 == 0
 #undef CNC_BOOSTERPACK_A4998
