@@ -87,17 +87,20 @@ typedef struct {
 static volatile uint32_t pid_count = 0;
 static spindle_control_t spindle_control = { .pid_state = PIDState_Disabled, .pid = {0}};
 
-#endif
-
+#endif // SPINDLE_RPM_CONTROLLED
 
 #elif defined(SPINDLE_RPM_CONTROLLED)
 #undef SPINDLE_RPM_CONTROLLED
-#endif
+#endif // DRIVER_SPINDLE_ENABLE
 
 static periph_signal_t *periph_pins = NULL;
 
 static input_signal_t inputpin[] = {
+#if ESTOP_ENABLE
+    { .id = Input_EStop,          .port = RESET_PORT,         .pin = RESET_PIN,           .group = PinGroup_Control },
+#else
     { .id = Input_Reset,          .port = RESET_PORT,         .pin = RESET_PIN,           .group = PinGroup_Control },
+#endif
     { .id = Input_FeedHold,       .port = FEED_HOLD_PORT,     .pin = FEED_HOLD_PIN,       .group = PinGroup_Control },
     { .id = Input_CycleStart,     .port = CYCLE_START_PORT,   .pin = CYCLE_START_PIN,     .group = PinGroup_Control },
 #if SAFETY_DOOR_ENABLE
@@ -243,11 +246,6 @@ static delay_t delay = { .ms = 1, .callback = NULL }; // NOTE: initial ms set to
 
 static probe_state_t probe = {
     .connected = On
-};
-
-static probeflags_t psettings =
-{
-    0 //.enable_protection = On
 };
 
 #include "grbl/stepdir_map.h"
@@ -588,16 +586,16 @@ static void probeConnectedToggle (void)
 // and the probing cycle modes for toward-workpiece/away-from-workpiece.
 static void probeConfigure (bool is_probe_away, bool probing)
 {
-    probe.triggered = Off;
-    probe.is_probing = probing;
+    probe.is_probing = Off;
     probe.inverted = is_probe_away ? !settings.probe.invert_probe_pin : settings.probe.invert_probe_pin;
+    probe.triggered = hal.probe.get_state().triggered;
 
-    if(psettings.enable_protection) {
-        BITBAND_PERI(PROBE_PORT->IE, PROBE_PIN) = 0;
-        BITBAND_PERI(PROBE_PORT->IES, PROBE_PIN) = probing ? probing : probe.inverted;
-        BITBAND_PERI(PROBE_PORT->IFG, PROBE_PIN) = 0;
-        BITBAND_PERI(PROBE_PORT->IE, PROBE_PIN) = 1;
-    }
+    BITBAND_PERI(PROBE_PORT->IE, PROBE_PIN) = 0;
+    BITBAND_PERI(PROBE_PORT->IES, PROBE_PIN) = probing ? settings.probe.invert_probe_pin : probe.inverted;
+    BITBAND_PERI(PROBE_PORT->IFG, PROBE_PIN) = 0;
+    BITBAND_PERI(PROBE_PORT->IE, PROBE_PIN) = 1;
+
+    probe.is_probing = probing;
 }
 
 // Returns the probe pin state. Triggered = true.
@@ -606,11 +604,7 @@ probe_state_t probeGetState (void)
     probe_state_t state = {0};
 
     state.connected = probe.connected;
-
-    if(psettings.enable_protection)
-        state.triggered = probe.triggered || BITBAND_PERI(PROBE_PORT->IN, PROBE_PIN) ^ probe.inverted;
-    else
-        state.triggered = BITBAND_PERI(PROBE_PORT->IN, PROBE_PIN) ^ probe.inverted;
+    state.triggered = probe.is_probing ? probe.triggered : BITBAND_PERI(PROBE_PORT->IN, PROBE_PIN) ^ probe.inverted;
 
     return state;
 }
@@ -1107,12 +1101,17 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
             BITBAND_PERI(input->port->IE, input->pin) = 0;
 
             switch(input->id) {
-
+#if ESTOP_ENABLE
+                case Input_EStop:
+                    pullup = !settings->control_disable_pullup.e_stop;
+                    input->irq_mode = control_fei.e_stop ? IRQ_Mode_Falling : IRQ_Mode_Rising;
+                    break;
+#else
                 case Input_Reset:
                     pullup = !settings->control_disable_pullup.reset;
                     input->irq_mode = control_fei.reset ? IRQ_Mode_Falling : IRQ_Mode_Rising;
                     break;
-
+#endif
                 case Input_FeedHold:
                     pullup = !settings->control_disable_pullup.feed_hold;
                     input->irq_mode = control_fei.feed_hold ? IRQ_Mode_Falling : IRQ_Mode_Rising;
@@ -1130,8 +1129,7 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
 
                 case Input_Probe:
                     pullup = hal.driver_cap.probe_pull_up;
-                    if(psettings.enable_protection)
-                        input->irq_mode = settings->probe.invert_probe_pin ? IRQ_Mode_Falling : IRQ_Mode_Rising;
+                    input->irq_mode = settings->probe.invert_probe_pin ? IRQ_Mode_Falling : IRQ_Mode_Rising;
                     break;
 
                 case Input_LimitX:
@@ -1533,9 +1531,13 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "230511";
+    hal.driver_version = "230730";
+    hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
+#endif
+#ifdef BOARD_URL
+    hal.board_url = BOARD_URL;
 #endif
     hal.driver_setup = driver_setup;
     hal.f_step_timer = SystemCoreClock;
@@ -1655,6 +1657,7 @@ bool driver_init (void)
     hal.driver_cap.control_pull_up = On;
     hal.driver_cap.limits_pull_up = On;
     hal.driver_cap.probe_pull_up = On;
+    hal.driver_cap.probe_latch = On;
 
     uint32_t i;
     input_signal_t *input;
@@ -1875,18 +1878,15 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t *input, 
                 case PinGroup_AuxInput:
                     ioports_event(input);
                     break;
-/*
+
                 case PinGroup_Probe:
                     if(!probe.triggered) {
                         probe.triggered = On;
-                        if(!probe.is_probing) {
-                            if(probe.connected && elapsed_tics > ms)
-                                hal.control_interrupt_callback((control_signals_t){ .probe_triggered = On });
-                        } else
-                            ms = elapsed_tics + 300;
+                        if(!probe.is_probing && probe.connected && settings.probe.enable_protection)
+                            hal.control.interrupt_callback((control_signals_t){ .probe_triggered = On });
                     }
                     break;
-*/
+
                 default:
                     groups |= input->group;
                     break;
