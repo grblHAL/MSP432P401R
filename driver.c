@@ -516,9 +516,9 @@ static void stepperPulseStartSynchronized (stepper_t *stepper)
 }
 
 // Enable/disable limit pins interrupt
-static void limitsEnable (bool on, bool homing)
+static void limitsEnable (bool on, axes_signals_t homing_cycle)
 {
-    on = on && settings.limits.flags.hard_enabled;
+    on = on && homing_cycle.mask == 0;
 
     input_signal_t *limit;
     uint_fast8_t limits = limit_inputs.n_pins;
@@ -599,7 +599,7 @@ static void probeConfigure (bool is_probe_away, bool probing)
 }
 
 // Returns the probe pin state. Triggered = true.
-probe_state_t probeGetState (void)
+static probe_state_t probeGetState (void)
 {
     probe_state_t state = {0};
 
@@ -1531,7 +1531,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "230730";
+    hal.driver_version = "230828";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1643,6 +1643,7 @@ bool driver_init (void)
     hal.signals_cap.limits_override = On;
 #endif
     hal.limits_cap = get_limits_cap();
+    hal.home_cap = get_home_cap();
     hal.driver_cap.spindle_sync = On;
 #ifdef PWM_SPINDLE
   #ifdef SPINDLE_RPM_CONTROLLED
