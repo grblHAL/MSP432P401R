@@ -518,16 +518,23 @@ static void stepperPulseStartSynchronized (stepper_t *stepper)
 // Enable/disable limit pins interrupt
 static void limitsEnable (bool on, axes_signals_t homing_cycle)
 {
-    on = on && homing_cycle.mask == 0;
-
+    bool disable = !on;
+    axes_signals_t pin;
     input_signal_t *limit;
-    uint_fast8_t limits = limit_inputs.n_pins;
+    uint_fast8_t idx = limit_inputs.n_pins;
+    limit_signals_t homing_source = xbar_get_homing_source_from_cycle(homing_cycle);
 
     do {
-        limit = &limit_inputs.pins.inputs[--limits];
-        BITBAND_PERI(limit->port->IFG, limit->pin) = 0;
-        BITBAND_PERI(limit->port->IE, limit->pin) = on;
-    } while(limits);
+        limit = &limit_inputs.pins.inputs[--idx];
+        if(limit->group & (PinGroup_Limit|PinGroup_LimitMax)) {
+            if(on && homing_cycle.mask) {
+                pin = xbar_fn_to_axismask(limit->id);
+                disable = limit->group == PinGroup_Limit ? (pin.mask & homing_source.min.mask) : (pin.mask & homing_source.max.mask);
+            }
+            BITBAND_PERI(limit->port->IFG, limit->pin) = 0;
+            BITBAND_PERI(limit->port->IE, limit->pin) = !disable;
+        }
+    } while(idx);
 }
 
 // Returns limit state as an axes_signals_t variable.
@@ -1531,7 +1538,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "230828";
+    hal.driver_version = "230907";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
