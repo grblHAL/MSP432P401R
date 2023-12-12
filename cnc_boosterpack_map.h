@@ -47,8 +47,8 @@
 #undef EEPROM_ENABLE
 
 #define CNC_BOOSTERPACK  1 // Do not change!
-#define I2C_ENABLE       0 // Only change if BoosterPack does not have EEPROM mounted
-#define EEPROM_ENABLE    0 // Only change if BoosterPack does not have EEPROM mounted
+#define I2C_ENABLE       1 // Only change if BoosterPack does not have EEPROM mounted
+#define EEPROM_ENABLE    1 // Only change if BoosterPack does not have EEPROM mounted
 
 #define HAS_IOPORTS
 
@@ -168,16 +168,31 @@
 #define PROBE_GPIO              portGpio(PROBE_PN)
 #define PROBE_PIN               14
 
-// Define spindle enable, spindle direction and PWM output pins.
+// Define driver spindle pins
 
-#define SPINDLE_ENABLE_PORT     port(B)
-#define SPINDLE_ENABLE_PIN      15
-
-#define SPINDLE_DIRECTION_PORT  port(C)
-#define SPINDLE_DIRECTION_PIN   4
-
+#if DRIVER_SPINDLE_PWM_ENABLE
 #define SPINDLE_PWM_PORT        P2
 #define SPINDLE_PWM_PIN         5
+#else
+#define AUXOUTPUT0_PORT         GPIOA
+#define AUXOUTPUT0_PIN          8
+#endif
+
+#if DRIVER_SPINDLE_DIR_ENABLE
+#define SPINDLE_DIRECTION_PORT  port(C)
+#define SPINDLE_DIRECTION_PIN   4
+#else
+#define AUXOUTPUT1_PORT         port(C)
+#define AUXOUTPUT1_PIN          4
+#endif
+
+#if DRIVER_SPINDLE_ENABLE
+#define SPINDLE_ENABLE_PORT     port(B)
+#define SPINDLE_ENABLE_PIN      15
+#else
+#define AUXOUTPUT2_PORT         port(B)
+#define AUXOUTPUT2_PIN          15
+#endif
 
 #define SPINDLE_PID_SAMPLE_RATE 5 // ms
 

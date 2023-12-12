@@ -28,7 +28,17 @@
 
 #define SAFETY_DOOR_ENABLE 1 // Enable safety door input.
 //#define PLASMA_ENABLE      1 // Plasma/THC plugin.
-//#define VFD_ENABLE         1 // Set to 1 or 2 for Huanyang VFD spindle. More here https://github.com/grblHAL/Plugins_spindle
+// Spindle selection:
+// Up to four specific spindle drivers can be instantiated at a time
+// depending on N_SPINDLE and N_SYS_SPINDLE definitions in grbl/config.h.
+// If none are specified the default PWM spindle is instantiated.
+// Spindle definitions can be found in grbl/spindle_control.h.
+// More here https://github.com/grblHAL/Plugins_spindle
+//#define SPINDLE0_ENABLE        SPINDLE_HUANYANG1
+//#define SPINDLE1_ENABLE        SPINDLE_PWM0
+//#define SPINDLE2_ENABLE        SPINDLE_NONE 
+//#define SPINDLE2_ENABLE        SPINDLE_NONE
+// **********************
 //#define MODBUS_ENABLE      1 // Set to 1 for auto direction, 2 for direction signal on auxillary output pin.
 //#define MPG_ENABLE         1 // Enable MPG interface. Requires serial port and one handshake pin unless
                                // KEYPAD_ENABLE is set to 2 when mode switching is done by the CMD_MPG_MODE_TOGGLE (0x8B)
