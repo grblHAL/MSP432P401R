@@ -50,8 +50,6 @@
 #define I2C_ENABLE       1 // Only change if BoosterPack does not have EEPROM mounted
 #define EEPROM_ENABLE    1 // Only change if BoosterPack does not have EEPROM mounted
 
-#define HAS_IOPORTS
-
 // Define step pulse output pins. NOTE: All step bit pins must be on the same port.
 
 #define STEP_PORT               port(B)
@@ -140,10 +138,6 @@
 #define CYCLE_START_PIN         8
 #define FEED_HOLD_PORT          port(C)
 #define FEED_HOLD_PIN           14
-#if SAFETY_DOOR_ENABLE
-#define SAFETY_DOOR_PORT        port(C)
-#define SAFETY_DOOR_PIN         9
-#endif
 
 #else
 
@@ -153,10 +147,6 @@
 #define CYCLE_START_PIN         15
 #define FEED_HOLD_PORT          port(C)
 #define FEED_HOLD_PIN           14
-#if SAFETY_DOOR_ENABLE
-#define SAFETY_DOOR_PORT        port(C)
-#define SAFETY_DOOR_PIN         6
-#endif
 
 #define CONTROL_INMODE          GPIO_BITBAND
 
@@ -235,6 +225,27 @@
 #define AUXINPUT1_PIN           3 // GPIO5
 #endif
 
+#if CNC_BOOSTERPACK_SHORTS
+#define AUXINPUT2_PORT          port(C)
+#define AUXINPUT2_PIN           9
+#else
+#define AUXINPUT2_PORT          port(C)
+#define AUXINPUT2_PIN           6
+#endif
+
+#define AUXINPUT3_PORT          port(B) // GPIO3
+#define AUXINPUT3_PIN           6
+
+#if SAFETY_DOOR_ENABLE
+#define SAFETY_DOOR_PORT        AUXINPUT2_PORT
+#define SAFETY_DOOR_PIN         AUXINPUT2_PIN
+#endif
+
+#if MOTOR_FAULT_ENABLE
+#define MOTOR_FAULT_PORT        AUXINPUT1_PORT
+#define MOTOR_FAULT_PIN         AUXINPUT1_PIN
+#endif
+
 // Define MPG mode input (for selecting secondary UART input)
 
 #if MPG_MODE == 1
@@ -242,12 +253,6 @@
 #define MPG_MODE_PIN            2 // GPIO2
 #endif
 
-// Define limit switches override input
-
-#if LIMITS_OVERRIDE_ENABLE // GPIO3
-#define LIMITS_OVERRIDE_PORT    port(B)
-#define LIMITS_OVERRIDE_PIN     6
-#endif
 
 #if I2C_STROBE_ENABLE // GPIO6
 #define I2C_STROBE_PORT         port(B)
