@@ -3,7 +3,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2021-2023 Terje Io
+  Copyright (c) 2021-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -101,7 +101,7 @@ inline static __attribute__((always_inline)) int32_t get_input (const input_sign
     return value;
 }
 
-static inline __attribute__((always_inline)) uint8_t get_idx (input_signal_t *input)
+static inline __attribute__((always_inline)) uint8_t get_port (input_signal_t *input)
 {
     uint_fast8_t port = digital.in.n_ports;
     do {
@@ -119,7 +119,7 @@ void ioports_event (input_signal_t *input)
     event_bits |= input->bit;
 
     if(input->interrupt_callback)
-        input->interrupt_callback(ioports_map_reverse(&digital.in, get_idx(input)), BITBAND_PERI(input->port->IN, input->pin));
+        input->interrupt_callback(ioports_map_reverse(&digital.in, get_port(input)), BITBAND_PERI(input->port->IN, input->pin));
     else
         event_bits |= input->bit;
 
@@ -300,30 +300,85 @@ bool swap_pins (io_port_type_t type, io_port_direction_t dir, uint8_t port_a, ui
 
 static void on_setting_changed (setting_id_t id)
 {
-    if(id == Settings_IoPort_InvertOut && invert_digital_out.mask != settings.ioport.invert_out.mask) {
+    bool write = false;
+    uint_fast8_t port;
 
-        uint_fast8_t port = digital.out.n_ports;
-        do {
-            port--;
-            if(((settings.ioport.invert_out.mask >> port) & 0x01) != ((invert_digital_out.mask >> port) & 0x01))
-                BITBAND_PERI(aux_out[port].port->OUT, aux_out[port].pin) = !BITBAND_PERI(aux_out[port].port->IN, aux_out[port].pin);
-        } while(port);
+    switch(id) {
 
-        invert_digital_out = settings.ioport.invert_out;
+        case Settings_IoPort_InvertIn:
+            port = digital.in.n_ports;
+            do {
+                if(aux_in[--port].aux_ctrl) {
+                    write = true;
+                    if(settings.ioport.invert_in.mask & (1 << port))
+                        settings.control_invert.mask |= aux_in[port].aux_ctrl->cap.mask;
+                    else
+                        settings.control_invert.mask &= ~aux_in[port].aux_ctrl->cap.mask;
+                }
+            } while(port);
+            break;
+
+        case Settings_IoPort_InvertOut:
+            if(invert_digital_out.mask != settings.ioport.invert_out.mask) {
+                port = digital.out.n_ports;
+                do {
+                    port--;
+                    if(((settings.ioport.invert_out.mask >> port) & 0x01) != ((invert_digital_out.mask >> port) & 0x01))
+                        BITBAND_PERI(aux_out[port].port->OUT, aux_out[port].pin) = !BITBAND_PERI(aux_out[port].port->IN, aux_out[port].pin);
+                } while(port);
+
+                invert_digital_out = settings.ioport.invert_out;
+            }
+            break;
+
+        case Setting_ControlInvertMask:
+            port = digital.in.n_ports;
+            do {
+                if(aux_in[--port].aux_ctrl) {
+                    write = true;
+                    if(settings.control_invert.mask & aux_in[port].aux_ctrl->cap.mask)
+                        settings.ioport.invert_in.mask |= (1 << port);
+                    else
+                        settings.ioport.invert_in.mask &= ~(1 << port);
+                }
+            } while(port);
+            break;
+
+        default:
+            break;
     }
+
+    if(write)
+        settings_write_global();
 }
 
 static void on_settings_loaded (void)
 {
-//    aux_set_pullup();
-    uint_fast8_t idx = digital.out.n_ports;
+    bool write = false;
+    uint_fast8_t port = digital.out.n_ports;
 
     invert_digital_out = settings.ioport.invert_out;
 
     if(digital.out.n_ports) do {
-        idx--;
-        BITBAND_PERI(aux_out[idx].port->OUT, aux_out[idx].pin) = (settings.ioport.invert_out.mask >> idx) & 0x01;
-    } while(idx);
+        port--;
+        BITBAND_PERI(aux_out[port].port->OUT, aux_out[port].pin) = (settings.ioport.invert_out.mask >> port) & 0x01;
+    } while(port);
+
+    port = digital.in.n_ports;
+    do {
+        if(aux_in[--port].aux_ctrl &&
+            !!(settings.control_invert.mask & aux_in[port].aux_ctrl->cap.mask) !=
+             !!(settings.ioport.invert_in.mask & (1 << port))) {
+            write = true;
+            if(settings.control_invert.mask & aux_in[port].aux_ctrl->cap.mask)
+                settings.ioport.invert_in.mask |= (1 << port);
+            else
+                settings.ioport.invert_in.mask &= ~(1 << port);
+        }
+    } while(port);
+
+    if(write)
+        settings_write_global();
 }
 
 void ioports_init (pin_group_pins_t *aux_inputs, pin_group_pins_t *aux_outputs)
