@@ -3,7 +3,7 @@
 
   Part of grblHAL driver for MSP432P401R
 
-  Copyright (c) 2018-2023 Terje Io
+  Copyright (c) 2018-2024 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -331,11 +331,6 @@ void motor_postinit (motor_map_t motor, const tmchal_t *driver)
 
 #endif
 
-static void pos_failed (uint_fast16_t state)
-{
-    report_message("I2C bus error!", Message_Warning);
-}
-
 #define I2C_SCL_PIN 4
 #define I2C_SDA_PIN 5
 
@@ -343,10 +338,10 @@ void i2c_init (void)
 {
     memset(&i2c, 0, sizeof(i2c_tr_trans_t));
 
-    P6->SEL0 |= (1<<I2C_SCL_PIN)|(1<<I2C_SDA_PIN);                                                          // Assign I2C pins to USCI_B1
+    P6->SEL0 |= (1<<I2C_SCL_PIN)|(1<<I2C_SDA_PIN);                                  // Assign I2C pins to USCI_B1
 
     if(!i2c_selftest()) {
-        protocol_enqueue_rt_command(pos_failed);
+        protocol_enqueue_foreground_task(report_warning, "I2C bus error!");
         system_raise_alarm(Alarm_SelftestFailed);
         return;
     }

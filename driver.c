@@ -1145,7 +1145,7 @@ static uint_fast16_t valueSetAtomic (volatile uint_fast16_t *ptr, uint_fast16_t 
 
 #if MPG_MODE == 1
 
-static void mpg_select (sys_state_t state)
+static void mpg_select (void *data)
 {
     stream_mpg_enable(BITBAND_PERI(MPG_MODE_PORT->IN, MPG_MODE_PIN) == 0);
 
@@ -1154,12 +1154,12 @@ static void mpg_select (sys_state_t state)
     BITBAND_PERI(MPG_MODE_PORT->IE, MPG_MODE_PIN) = 1;
 }
 
-static void mpg_enable (sys_state_t state)
+static void mpg_enable (void *data)
 {
     bool on = BITBAND_PERI(MPG_MODE_PORT->IN, MPG_MODE_PIN) == 0;
 
     if(sys.mpg_mode == (BITBAND_PERI(MPG_MODE_PORT->IN, MPG_MODE_PIN) == 0))
-        mpg_select(state);
+        mpg_select(data);
 
 #if I2C_STROBE_ENABLE
     BITBAND_PERI(I2C_STROBE_PORT->IE, I2C_STROBE_PIN) = 1;
@@ -1705,7 +1705,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "240119";
+    hal.driver_version = "240125";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1856,7 +1856,7 @@ bool driver_init (void)
             if(aux_inputs.pins.inputs == NULL)
                 aux_inputs.pins.inputs = input;
             input->id = (pin_function_t)(Input_Aux0 + aux_inputs.n_pins++);
-            input->cap.pull_mode = PullMode_UpDown;
+            input->mode.pull_mode = input->cap.pull_mode = PullMode_Up;
             input->cap.irq_mode = (IRQ_Mode_Rising|IRQ_Mode_Falling);
 #if SAFETY_DOOR_ENABLE
             if(input->port == SAFETY_DOOR_PORT && input->pin == SAFETY_DOOR_PIN && input->cap.irq_mode != IRQ_Mode_None) {
@@ -1923,10 +1923,10 @@ bool driver_init (void)
 #if MPG_MODE == 1
   #if KEYPAD_ENABLE == 2
     if((hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL), false, keypad_enqueue_keycode)))
-        protocol_enqueue_rt_command(mpg_enable);
+        protocol_enqueue_foreground_task(mpg_enable, NULL);
   #else
     if((hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL), false, NULL)))
-        protocol_enqueue_rt_command(mpg_enable);
+        protocol_enqueue_foreground_task(mpg_enable, NULL);
   #endif
 #elif MPG_MODE == 2
     hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL), false, keypad_enqueue_keycode);
@@ -2080,7 +2080,7 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t *input, 
 #if MPG_MODE == 1
                 case PinGroup_MPG:
                     BITBAND_PERI(MPG_MODE_PORT->IE, MPG_MODE_PIN) = 0;
-                    protocol_enqueue_rt_command(mpg_select);
+                    protocol_enqueue_foreground_task(mpg_select, NULL);
                     break;
 #endif
 
