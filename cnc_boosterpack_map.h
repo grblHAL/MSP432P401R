@@ -6,21 +6,20 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2022 Terje Io
+  Copyright (c) 2017-2024 Terje Io
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  grblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
-
+  along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #if TRINAMIC_ENABLE
@@ -152,12 +151,6 @@
 
 #endif
 
-// Define probe switch input pin.
-
-#define PROBE_PORT              port(B)
-#define PROBE_GPIO              portGpio(PROBE_PN)
-#define PROBE_PIN               14
-
 // Define driver spindle pins
 
 #if DRIVER_SPINDLE_PWM_ENABLE
@@ -235,6 +228,17 @@
 
 #define AUXINPUT3_PORT          port(B) // GPIO3
 #define AUXINPUT3_PIN           6
+#define AUXINPUT4_PORT          port(C) // GPIO2
+#define AUXINPUT4_PIN           2
+#define AUXINPUT5_PORT          port(B) // GPIO6
+#define AUXINPUT5_PIN           9
+#define AUXINPUT6_PORT          port(B) // Probe
+#define AUXINPUT6_PIN           14
+
+#if PROBE_ENABLE
+#define PROBE_PORT              AUXINPUT6_PORT
+#define PROBE_PIN               AUXINPUT6_PIN
+#endif
 
 #if SAFETY_DOOR_ENABLE
 #define SAFETY_DOOR_PORT        AUXINPUT2_PORT
@@ -246,17 +250,14 @@
 #define MOTOR_FAULT_PIN         AUXINPUT1_PIN
 #endif
 
-// Define MPG mode input (for selecting secondary UART input)
-
 #if MPG_MODE == 1
-#define MPG_MODE_PORT           port(C)
-#define MPG_MODE_PIN            2 // GPIO2
+#define MPG_MODE_PORT           AUXINPUT4_PORT
+#define MPG_MODE_PIN            AUXINPUT4_PIN
 #endif
 
-
-#if I2C_STROBE_ENABLE // GPIO6
-#define I2C_STROBE_PORT         port(B)
-#define I2C_STROBE_PIN          9
+#if I2C_STROBE_ENABLE
+#define I2C_STROBE_PORT         AUXINPUT5_PORT
+#define I2C_STROBE_PIN          AUXINPUT5_PIN
 #endif
 
 #define I2C_PN                  B1

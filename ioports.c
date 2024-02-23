@@ -5,18 +5,18 @@
 
   Copyright (c) 2021-2024 Terje Io
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  grblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
+  along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -30,9 +30,19 @@
 static io_ports_data_t digital;
 static input_signal_t *aux_in;
 static output_signal_t *aux_out;
-static ioport_bus_t invert_digital_out;
 static volatile uint32_t event_bits;
-static volatile bool spin_lock = false;
+
+static bool digital_out_cfg (xbar_t *output, gpio_out_config_t *config, bool persistent)
+{
+    if(output->id < digital.out.n_ports && config->inverted != aux_out[output->id].mode.inverted) {
+        aux_out[output->id].mode.inverted = config->inverted;
+        BITBAND_PERI(aux_out[output->id].port->OUT, aux_out[output->id].pin) = !BITBAND_PERI(aux_out[output->id].port->IN, aux_out[output->id].pin);
+        if(persistent)
+            ioport_save_output_settings(output, config);
+    }
+
+    return aux_out->id < digital.out.n_ports;
+}
 
 static void digital_out (uint8_t port, bool on)
 {
@@ -42,24 +52,37 @@ static void digital_out (uint8_t port, bool on)
     }
 }
 
-static float digital_out_state (xbar_t *pin)
+static float digital_out_state (xbar_t *output)
 {
     float value = -1.0f;
 
-    uint8_t port = pin->function - Output_Aux0;
-    if(port < digital.out.n_ports)
-        value = (float)(BITBAND_PERI(aux_out[port].port->OUT, aux_out[port].pin) ^ aux_out[port].mode.inverted);
+    if(output->id < digital.out.n_ports)
+        value = (float)(BITBAND_PERI(aux_out[output->id].port->OUT, aux_out[output->id].pin) ^ aux_out[output->id].mode.inverted);
 
     return value;
 }
 
-static float digital_in_state (xbar_t *pin)
+static bool digital_in_cfg (xbar_t *input, gpio_in_config_t *config, bool persistent)
+{
+    if(input->id < digital.in.n_ports && config->pull_mode != PullMode_UpDown) {
+        aux_in[input->id].mode.inverted = config->inverted;
+        aux_in[input->id].mode.pull_mode = config->pull_mode;
+        aux_in[input->id].mode.debounce = config->debounce;
+        BITBAND_PERI(aux_in[input->id].port->REN, aux_out[input->id].pin) = config->pull_mode == PullMode_Up;
+        BITBAND_PERI(aux_in[input->id].port->OUT, aux_out[input->id].pin) = config->pull_mode == PullMode_Up;
+        if(persistent)
+            ioport_save_input_settings(input, config);
+    }
+
+    return input->id < digital.in.n_ports;
+}
+
+static float digital_in_state (xbar_t *input)
 {
     float value = -1.0f;
 
-    uint8_t port = pin->function - Input_Aux0;
-    if(port < digital.in.n_ports)
-        value = (float)(BITBAND_PERI(aux_in[port].port->IN, aux_in[port].pin) ^ aux_in[port].mode.inverted);
+    if(input->id < digital.in.n_ports)
+        value = (float)(BITBAND_PERI(aux_in[input->id].port->IN, aux_in[input->id].pin) ^ aux_in[input->id].mode.inverted);
 
     return value;
 }
@@ -71,10 +94,10 @@ static void enable_irq (const input_signal_t *input, pin_irq_mode_t irq_mode)
     BITBAND_PERI(input->port->IE, input->pin) = irq_mode != IRQ_Mode_None;
 }
 
-inline static __attribute__((always_inline)) int32_t get_input (const input_signal_t *input, bool invert, wait_mode_t wait_mode, float timeout)
+inline static __attribute__((always_inline)) int32_t get_input (const input_signal_t *input, wait_mode_t wait_mode, float timeout)
 {
     if(wait_mode == WaitMode_Immediate)
-        return BITBAND_PERI(input->port->IN, input->pin) ^ invert;
+        return BITBAND_PERI(input->port->IN, input->pin) ^ input->mode.inverted;
 
     int32_t value = -1;
     uint_fast16_t delay = (uint_fast16_t)ceilf((1000.0f / 50.0f) * timeout) + 1;
@@ -90,7 +113,7 @@ inline static __attribute__((always_inline)) int32_t get_input (const input_sign
 
             do {
                 if(event_bits & input->bit) {
-                    value = BITBAND_PERI(input->port->IN, input->pin) ^ invert;
+                    value = BITBAND_PERI(input->port->IN, input->pin) ^ input->mode.inverted;
                     break;
                 }
                 if(delay) {
@@ -108,8 +131,8 @@ inline static __attribute__((always_inline)) int32_t get_input (const input_sign
         bool wait_for = wait_mode != WaitMode_Low;
 
         do {
-            if((BITBAND_PERI(input->port->IN, input->pin) ^ invert) == wait_for) {
-                value = BITBAND_PERI(input->port->IN, input->pin) ^ invert;
+            if((BITBAND_PERI(input->port->IN, input->pin) ^ input->mode.inverted) == wait_for) {
+                value = BITBAND_PERI(input->port->IN, input->pin) ^ input->mode.inverted;
                 break;
             }
             if(delay) {
@@ -123,29 +146,12 @@ inline static __attribute__((always_inline)) int32_t get_input (const input_sign
     return value;
 }
 
-static inline __attribute__((always_inline)) uint8_t get_port (input_signal_t *input)
-{
-    uint_fast8_t port = digital.in.n_ports;
-    do {
-        port--;
-        if(input->port == aux_in[port].port && input->pin == aux_in[port].pin)
-            break;
-    } while(port);
-
-    return port;
-}
-
 void ioports_event (input_signal_t *input)
 {
-    spin_lock = true;
     event_bits |= input->bit;
 
     if(input->interrupt_callback)
-        input->interrupt_callback(ioports_map_reverse(&digital.in, get_port(input)), BITBAND_PERI(input->port->IN, input->pin));
-    else
-        event_bits |= input->bit;
-
-    spin_lock = false;
+        input->interrupt_callback(input->user_port, BITBAND_PERI(input->port->IN, input->pin));
 }
 
 static int32_t wait_on_input (io_port_type_t type, uint8_t port, wait_mode_t wait_mode, float timeout)
@@ -154,7 +160,7 @@ static int32_t wait_on_input (io_port_type_t type, uint8_t port, wait_mode_t wai
 
     if(type == Port_Digital && port < digital.in.n_ports) {
         port = ioports_map(digital.in, port);
-        value = get_input(&aux_in[port], (settings.ioport.invert_in.mask << port) & 0x01, wait_mode, timeout);
+        value = get_input(&aux_in[port], wait_mode, timeout);
     }
 
     return value;
@@ -170,6 +176,8 @@ static bool register_interrupt_handler (uint8_t port, pin_irq_mode_t irq_mode, i
 
         input_signal_t *input = &aux_in[port];
 
+        BITBAND_PERI(input->port->IE, input->pin) = 0;     // Disable pin interrupt
+
         if((ok = (irq_mode & aux_in[port].cap.irq_mode) == irq_mode && interrupt_callback != NULL)) {
             input->mode.irq_mode = irq_mode;
             input->interrupt_callback = interrupt_callback;
@@ -177,10 +185,11 @@ static bool register_interrupt_handler (uint8_t port, pin_irq_mode_t irq_mode, i
         }
 
         if(irq_mode == IRQ_Mode_None || !ok) {
-            while(spin_lock);
-            BITBAND_PERI(input->port->IE, input->pin) = 0;     // Disable pin interrupt
+            hal.irq_disable();
+            enable_irq(input, IRQ_Mode_None);
             input->mode.irq_mode = IRQ_Mode_None;
             input->interrupt_callback = NULL;
+            hal.irq_enable();
         }
     }
 
@@ -194,37 +203,13 @@ static xbar_t *get_pin_info (io_port_type_t type, io_port_direction_t dir, uint8
 
     if(type == Port_Digital) {
 
-        memset(&pin, 0, sizeof(xbar_t));
-
         if(dir == Port_Input && port < digital.in.n_ports) {
-            port = ioports_map(digital.in, port);
-            pin.mode = aux_in[port].mode;
-            pin.cap = aux_in[port].cap;
-            pin.cap.invert = On;
-            pin.cap.claimable = !pin.mode.claimed;
-            pin.function = aux_in[port].id;
-            pin.group = aux_in[port].group;
-            pin.pin = aux_in[port].pin;
-            pin.bit = aux_in[port].bit;
-            pin.port = (void *)aux_in[port].port;
-            pin.description = aux_in[port].description;
-            pin.get_value = digital_in_state;
+            XBAR_SET_DIN_INFO(pin, ioports_map(digital.in, port), aux_in[pin.id], digital_in_cfg, digital_in_state);
             info = &pin;
         }
 
         if(dir == Port_Output && port < digital.out.n_ports) {
-            port = ioports_map(digital.out, port);
-            pin.mode = aux_out[port].mode;
-            XBAR_SET_CAP(pin.cap, pin.mode);
-            pin.cap.invert = On;
-            pin.mode.inverted = (settings.ioport.invert_out.mask >> port) & 0x01;
-            pin.function = aux_out[port].id;
-            pin.group = aux_out[port].group;
-            pin.pin = aux_out[port].pin;
-            pin.bit = 1 << aux_out[port].pin;
-            pin.port = (void *)aux_out[port].port;
-            pin.description = aux_out[port].description;
-            pin.get_value = digital_out_state;
+            XBAR_SET_DOUT_INFO(pin, ioports_map(digital.out, port), aux_out[pin.id], digital_out_cfg, digital_out_state);
             info = &pin;
         }
     }
@@ -258,10 +243,12 @@ static bool claim (io_port_type_t type, io_port_direction_t dir, uint8_t *port, 
 
                 for(i = ioports_map_reverse(&digital.in, *port); i < hal.port.num_digital_in ; i++) {
                     digital.in.map[i] = digital.in.map[i + 1];
+                    aux_in[digital.in.map[i]].user_port = i;
                     aux_in[digital.in.map[i]].description = iports_get_pnum(digital, i);
                 }
 
                 aux_in[*port].mode.claimed = On;
+                aux_in[*port].user_port = hal.port.num_digital_in;
                 aux_in[*port].description = description;
 
                 digital.in.map[hal.port.num_digital_in] = *port;
@@ -324,91 +311,6 @@ bool swap_pins (io_port_type_t type, io_port_direction_t dir, uint8_t port_a, ui
     return ok;
 }
 
-static void on_setting_changed (setting_id_t id)
-{
-    bool write = false;
-    uint_fast8_t port;
-
-    switch(id) {
-
-        case Settings_IoPort_InvertIn:
-            if((port = digital.in.n_ports)) do {
-                port--;
-                aux_in[port].mode.inverted = !!(settings.ioport.invert_in.mask & (1 << port));
-                if(aux_in[port].aux_ctrl) {
-                    write = true;
-                    if(aux_in[port].mode.inverted)
-                        settings.control_invert.mask |= aux_in[port].aux_ctrl->cap.mask;
-                    else
-                        settings.control_invert.mask &= ~aux_in[port].aux_ctrl->cap.mask;
-                }
-            } while(port);
-            break;
-
-        case Settings_IoPort_InvertOut:
-            if((port = digital.out.n_ports) && invert_digital_out.mask != settings.ioport.invert_out.mask) {
-                do {
-                    port--;
-                    aux_out[port].mode.inverted = !!(settings.ioport.invert_out.mask & (1 << port));
-                    if(((settings.ioport.invert_out.mask >> port) & 0x01) != ((invert_digital_out.mask >> port) & 0x01))
-                        BITBAND_PERI(aux_out[port].port->OUT, aux_out[port].pin) = !BITBAND_PERI(aux_out[port].port->IN, aux_out[port].pin);
-                } while(port);
-
-                invert_digital_out = settings.ioport.invert_out;
-            }
-            break;
-
-        case Setting_ControlInvertMask:
-            if((port = digital.in.n_ports)) do {
-                if(aux_in[--port].aux_ctrl) {
-                    write = true;
-                    if(settings.control_invert.mask & aux_in[port].aux_ctrl->cap.mask)
-                        settings.ioport.invert_in.mask |= (1 << port);
-                    else
-                        settings.ioport.invert_in.mask &= ~(1 << port);
-                    aux_in[port].mode.inverted = !!(settings.ioport.invert_in.mask & (1 << port));
-                }
-            } while(port);
-            break;
-
-        default:
-            break;
-    }
-
-    if(write)
-        settings_write_global();
-}
-
-static void on_settings_loaded (void)
-{
-    bool write = false;
-    uint_fast8_t port;
-
-    invert_digital_out = settings.ioport.invert_out;
-
-    if((port = digital.out.n_ports)) do {
-        port--;
-        aux_out[port].mode.inverted = !!(settings.ioport.invert_out.mask & (1 << port));
-        BITBAND_PERI(aux_out[port].port->OUT, aux_out[port].pin) = aux_out[port].mode.inverted;
-    } while(port);
-
-    if((port = digital.in.n_ports)) do {
-        if(aux_in[--port].aux_ctrl &&
-            !!(settings.control_invert.mask & aux_in[port].aux_ctrl->cap.mask) !=
-             !!(settings.ioport.invert_in.mask & (1 << port))) {
-            write = true;
-            if(settings.control_invert.mask & aux_in[port].aux_ctrl->cap.mask)
-                settings.ioport.invert_in.mask |= (1 << port);
-            else
-                settings.ioport.invert_in.mask &= ~(1 << port);
-        }
-        aux_in[port].mode.inverted = !!(settings.ioport.invert_in.mask & (1 << port));
-    } while(port);
-
-    if(write)
-        settings_write_global();
-}
-
 void ioports_init (pin_group_pins_t *aux_inputs, pin_group_pins_t *aux_outputs)
 {
     aux_in = aux_inputs->pins.inputs;
@@ -430,7 +332,7 @@ void ioports_init (pin_group_pins_t *aux_inputs, pin_group_pins_t *aux_outputs)
         hal.port.swap_pins = swap_pins;
         hal.port.get_pin_info = get_pin_info;
 
-        ioports_add_settings(on_settings_loaded, on_setting_changed);
+        ioports_add_settings(NULL, NULL);
 
     } else
         hal.port.set_pin_description = NULL;
