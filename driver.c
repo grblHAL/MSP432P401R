@@ -1025,6 +1025,17 @@ static spindle_data_t *spindleGetData (spindle_data_request_t request)
 #endif
             break;
 
+        case SpindleData_AtSpeed:
+            if(!stopped)
+#ifdef SPINDLE_RPM_CONTROLLED
+                spindle_data.rpm = spindle_control.pid_enabled ? spindle_control.rpm : spindle_calc_rpm(pulse_length);
+#else
+                spindle_data.rpm = spindle_calc_rpm(pulse_length);
+#endif
+            spindle_data.state_programmed.at_speed = settings.spindle.at_speed_tolerance <= 0.0f || (spindle_data.rpm >= spindle_data.rpm_low_limit && spindle_data.rpm <= spindle_data.rpm_high_limit);
+            spindle_data.state_programmed.encoder_error = spindle_encoder.error_count > 0;
+            break;
+
         case SpindleData_AngularPosition:;
             int32_t d = (uint16_t)((uint16_t)encoder.last_count - (uint16_t)encoder.last_index);
             if(d < 0)
@@ -1646,7 +1657,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "240220";
+    hal.driver_version = "240310";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
