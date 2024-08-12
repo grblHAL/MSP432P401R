@@ -159,21 +159,14 @@
 #define SPINDLE_PWM_TIM   A0
 #define SPINDLE_PWM_TIMER timer(SPINDLE_PWM_TIM)
 
-#define RPM_CNT               A1
-#define RPM_COUNTER           timer(RPM_CNT)
-#define RPM_COUNTER_INT0      timerINT0(RPM_CNT)
-#define RPMCOUNTER_IRQHandler timerHANDLER0(RPM_CNT)
-#define RPM_COUNTER_PN        7
-#define RPM_COUNTER_PORT      port(RPM_COUNTER_PN)
-#define RPM_COUNTER_PIN       2
-#define RPM_COUNTER_BIT       (1<<RPM_COUNTER_PIN)
+#define RPM_CNT                 A1
+#define RPM_COUNTER             timer(RPM_CNT)
+#define SPINDLE_PULSE_INT0      timerINT0(RPM_CNT)
+#define RPMCOUNTER_IRQHandler   timerHANDLER0(RPM_CNT)
 
 #define RPM_TIM       2
 #define RPM_TIMER     timer32(RPM_TIM)
 #define RPM_TIMER_INT timer32INT(RPM_TIM)
-
-#define RPM_INDEX_PORT  port(C)
-#define RPM_INDEX_PIN   11
 
 #if KEYPAD_ENABLE == 1 && !defined(I2C_STROBE_PORT)
 #error Keypad plugin not supported!

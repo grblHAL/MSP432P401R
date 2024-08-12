@@ -265,6 +265,16 @@
 #define I2C_INT                 I2CportINT(I2C_PN)
 #define I2C_IRQHandler          I2CportHANDLER(I2C_PN)
 
+#if SPINDLE_ENCODER_ENABLE
+#define SPINDLE_PULSE_PN        7
+#define SPINDLE_PULSE_PORT      port(SPINDLE_PULSE_PN)
+#define SPINDLE_PULSE_PIN       2
+#if SPINDLE_SYNC_ENABLE
+#define SPINDLE_INDEX_PORT      port(C)
+#define SPINDLE_INDEX_PIN       11
+#endif
+#endif
+
 //#define RTS_PORT                port(B)
 //#define RTS_PIN                 4
 
