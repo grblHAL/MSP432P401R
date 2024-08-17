@@ -210,7 +210,7 @@
 #define GPIO6_INT               portINT(GPIO6_PN)
 #define GPIO6_PIN               1
 
-#if !(MPG_MODE == 1 || MODBUS_ENABLE)
+#if !(MPG_ENABLE == 1 || MODBUS_ENABLE)
 #define AUXINPUT0_PORT          port(B)
 #define AUXINPUT0_PIN           2 // GPIO4
 
@@ -250,7 +250,7 @@
 #define MOTOR_FAULT_PIN         AUXINPUT1_PIN
 #endif
 
-#if MPG_MODE == 1
+#if MPG_ENABLE == 1
 #define MPG_MODE_PORT           AUXINPUT4_PORT
 #define MPG_MODE_PIN            AUXINPUT4_PIN
 #endif

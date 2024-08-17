@@ -45,10 +45,6 @@
 #include "eeprom/eeprom.h"
 #endif
 
-#if KEYPAD_ENABLE
-#include "keypad/keypad.h"
-#endif
-
 #if ATC_ENABLE
 #include "atc.h"
 #endif
@@ -648,7 +644,7 @@ static probe_state_t probeGetState (void)
 
 #endif // PROBE_ENABLE
 
-#if MPG_MODE == 1
+#if MPG_ENABLE == 1
 
 static void mpg_select (void *data)
 {
@@ -671,7 +667,7 @@ static void mpg_enable (void *data)
 #endif
 }
 
-#endif //  MPG_MODE == 1
+#endif //  MPG_ENABLE == 1
 
 #if AUX_CONTROLS_ENABLED
 
@@ -1430,7 +1426,7 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
          *  MPG mode input enable  *
          ***************************/
 
-#if MPG_MODE == 1
+#if MPG_ENABLE == 1
         if(hal.driver_cap.mpg_mode) {
             // Enable pullup and switch to input
             BITBAND_PERI(MPG_MODE_PORT->OUT, MPG_MODE_PIN) = 1;
@@ -1691,14 +1687,14 @@ bool driver_init (void)
     SysTick->VAL = 0;
     SysTick->CTRL |= SysTick_CTRL_CLKSOURCE_Msk|SysTick_CTRL_TICKINT_Msk|SysTick_CTRL_ENABLE_Msk;
 
-#if MPG_MODE == 1
+#if MPG_ENABLE == 1
     // Drive MPG mode input pin low until setup complete
     BITBAND_PERI(MPG_MODE_PORT->DIR, MPG_MODE_PIN) = 1;
     BITBAND_PERI(MPG_MODE_PORT->OUT, MPG_MODE_PIN) = 0;
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "240812";
+    hal.driver_version = "240817";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1888,24 +1884,17 @@ bool driver_init (void)
     aux_ctrl_claim_ports(aux_claim_explicit, NULL);
 #endif
 
-#if MPG_MODE == 1
-  #if KEYPAD_ENABLE == 2
-    if((hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, keypad_enqueue_keycode)))
-        protocol_enqueue_foreground_task(mpg_enable, NULL);
-  #else
-    if((hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, NULL)))
-        protocol_enqueue_foreground_task(mpg_enable, NULL);
-  #endif
-#elif MPG_MODE == 2
-    hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, keypad_enqueue_keycode);
-#elif MPG_MODE == 3
-    hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, stream_mpg_check_enable);
-#elif KEYPAD_ENABLE == 2
-    stream_open_instance(KEYPAD_STREAM, 115200, keypad_enqueue_keycode, "Keypad");
-#endif
-
 #include "grbl/plugins_init.h"
 
+#if MPG_ENABLE == 1
+    if(!hal.driver_cap.mpg_mode)
+        hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, NULL);
+    if(hal.driver_cap.mpg_mode)
+        protocol_enqueue_foreground_task(mpg_enable, NULL);
+#elif MPG_ENABLE == 2
+    if(!hal.driver_cap.mpg_mode)
+        hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, stream_mpg_check_enable);
+#endif
     // no need to move version check before init - compiler will fail any signature mismatch for existing entries
     return hal.version == 10;
 }
@@ -2035,7 +2024,7 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t **inputs
                     spindle_encoder.counter.index_count++;
                     break;
 
-#if MPG_MODE == 1
+#if MPG_ENABLE == 1
                 case PinGroup_MPG:
                     BITBAND_PERI(MPG_MODE_PORT->IE, MPG_MODE_PIN) = 0;
                     protocol_enqueue_foreground_task(mpg_select, NULL);
