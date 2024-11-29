@@ -113,7 +113,9 @@ static input_signal_t inputpin[] = {
 #if LIMITS_OVERRIDE_BIT
   , { .id = Input_LimitsOverride, .port = LIMITS_OVERRIDE_PORT, .pin = LIMITS_OVERRIDE_PIN, .group = PinGroup_Limit }
 #endif
+#if SPINDLE_ENCODER_ENABLE
   , { .id = Input_SpindleIndex,   .port = SPINDLE_INDEX_PORT,     .pin = SPINDLE_INDEX_PIN,       .group = PinGroup_QEI_Index }
+#endif
 #if TRINAMIC_ENABLE == 2130
 #if TRINAMIC_I2C
     { .id = Input_MotorWarning,   .port = TRINAMIC_WARN_IRQ_PORT, .pin = TRINAMIC_WARN_IRQ_PIN,   .group = PinGroup_Motor_Warning },
@@ -243,7 +245,9 @@ static probe_state_t probe = {
 
 #include "grbl/stepdir_map.h"
 
+#if SPINDLE_ENCODER_ENABLE
 static void stepperPulseStartSynchronized (stepper_t *stepper);
+#endif
 
 #if I2C_STROBE_ENABLE
 
@@ -341,7 +345,9 @@ static void stepperWakeUp (void)
     hal.stepper.enable((axes_signals_t){AXES_BITMASK}, false);
     STEPPER_TIMER->LOAD = hal.f_step_timer / 500; // ~2ms delay to allow drivers time to wake up.
     STEPPER_TIMER->CONTROL |= TIMER32_CONTROL_ENABLE|TIMER32_CONTROL_IE;
+#if SPINDLE_ENCODER_ENABLE
     spindle_tracker.segment_id = 0;
+#endif
 }
 
 // Disables stepper driver interrupts
@@ -366,14 +372,14 @@ static void stepperCyclesPerTick (uint32_t cycles_per_tick)
 static void stepperPulseStart (stepper_t *stepper)
 {
     if(stepper->new_block) {
-
+#if SPINDLE_ENCODER_ENABLE
         if(stepper->exec_segment->spindle_sync) {
             spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
             hal.stepper.pulse_start = stepperPulseStartSynchronized;
             hal.stepper.pulse_start(stepper);
             return;
         }
-
+#endif
         if(stepper->dir_change)
             set_dir_outputs(stepper->dir_outbits);
     }
@@ -389,14 +395,14 @@ static void stepperPulseStart (stepper_t *stepper)
 static void stepperPulseStartDelayed (stepper_t *stepper)
 {
     if(stepper->new_block) {
-
+#if SPINDLE_ENCODER_ENABLE
         if(stepper->exec_segment->spindle_sync) {
             spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
             hal.stepper.pulse_start = stepperPulseStartSynchronized;
             hal.stepper.pulse_start(stepper);
             return;
         }
-
+#endif
         if(stepper->dir_change) {
 
             set_dir_outputs(stepper->dir_outbits);
@@ -418,6 +424,8 @@ static void stepperPulseStartDelayed (stepper_t *stepper)
         PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
     }
 }
+
+#if SPINDLE_ENCODER_ENABLE
 
 // Spindle sync version: sets stepper direction and pulse pins and starts a step pulse.
 // Switches back to "normal" version if spindle synchronized motion is finished.
@@ -505,6 +513,8 @@ static void stepperPulseStartSynchronized (stepper_t *stepper)
         spindle_tracker.prev_pos = stepper->exec_segment->target_position;
     }
 }
+
+#endif // SPINDLE_ENCODER_ENABLE
 
 // Enable/disable limit pins interrupt
 static void limitsEnable (bool on, axes_signals_t homing_cycle)
@@ -739,10 +749,14 @@ static bool aux_claim_explicit (aux_ctrl_t *aux_ctrl)
 
 #endif // AUX_CONTROLS_ENABLED
 
+#if SPINDLE_ENCODER_ENABLE
+
 inline static float spindle_calc_rpm (uint32_t tpp)
 {
     return spindle_encoder.rpm_factor / (float)tpp;
 }
+
+#endif
 
 #if DRIVER_SPINDLE_ENABLE
 
@@ -820,7 +834,7 @@ static void spindleSetSpeed (spindle_ptrs_t *spindle, uint_fast16_t pwm_value)
 }
 
 #ifdef SPINDLE_RPM_CONTROLLED
-todo: remove?
+// todo: remove?
 static void spindleUpdateRPM (spindle_ptrs_t *spindle, float rpm)
 {
     while(spindleLock); // wait for PID
@@ -1244,10 +1258,10 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
                 spindle_select(spindle_id);
         }
 #endif
-
+#if SPINDLE_ENCODER_ENABLE
         if(!hal.spindle_data.get)
             BITBAND_PERI(SPINDLE_INDEX_PORT->IE, SPINDLE_INDEX_PIN) = 0;
-
+#endif
         pulse_length = (uint16_t)(12.0f * (settings->steppers.pulse_microseconds - STEP_PULSE_LATENCY));
 
         if(hal.driver_cap.step_pulse_delay && settings->steppers.pulse_delay_microseconds > 0.0f) {
@@ -1616,7 +1630,7 @@ static bool driver_setup (settings_t *settings)
     atc_init();
 #endif
 
-    IOInitDone = settings->version == 22;
+    IOInitDone = settings->version.id == 22;
 
     hal.settings_changed(settings, (settings_changed_flags_t){0});
 
@@ -2025,6 +2039,7 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t **inputs
 
             } else switch(input->group) {
 
+#if SPINDLE_ENCODER_ENABLE
                 case PinGroup_QEI_Index:
                     if(spindle_encoder.counter.index_count && (uint16_t)(RPM_COUNTER->R - (uint16_t)spindle_encoder.counter.last_index) != spindle_encoder.ppr)
                         spindle_encoder.error_count++;
@@ -2033,6 +2048,7 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t **inputs
                     spindle_encoder.counter.last_index = RPM_COUNTER->R;
                     spindle_encoder.counter.index_count++;
                     break;
+#endif
 
 #if MPG_ENABLE == 1
                 case PinGroup_MPG:
