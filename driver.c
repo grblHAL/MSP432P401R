@@ -30,6 +30,9 @@
 #include "serial.h"
 
 #define AUX_DEVICES // until all drivers are converted?
+#ifndef AUX_CONTROLS
+#define AUX_CONTROLS (AUX_CONTROL_SPINDLE|AUX_CONTROL_COOLANT)
+#endif
 
 #include "grbl/machine_limits.h"
 #include "grbl/spindle_sync.h"
@@ -51,10 +54,10 @@
 
 #if DRIVER_SPINDLE_ENABLE
 static spindle_id_t spindle_id = -1;
-#if DRIVER_SPINDLE_PWM_ENABLE
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 static bool pwmEnabled = false;
 static spindle_pwm_t spindle_pwm;
-#endif // DRIVER_SPINDLE_PWM_ENABLE
+#endif // DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 #endif // DRIVER_SPINDLE_ENABLE
 
 #ifdef SPINDLE_RPM_CONTROLLED
@@ -193,13 +196,17 @@ static output_signal_t outputpin[] = {
 #ifdef C_ENABLE_PORT
     { .id = Output_StepperEnableC,  .port = C_ENABLE_PORT,          .pin = C_ENABLE_PIN,            .group = PinGroup_StepperEnable, },
 #endif
-#endif
+#endif // !TRINAMIC_MOTOR_ENABLE
+#if !(AUX_CONTROLS & AUX_CONTROL_SPINDLE)
 #if DRIVER_SPINDLE_ENABLE
     { .id = Output_SpindleOn,       .port = SPINDLE_ENABLE_PORT,    .pin = SPINDLE_ENABLE_PIN,      .group = PinGroup_SpindleControl },
     { .id = Output_SpindleDir,      .port = SPINDLE_DIRECTION_PORT, .pin = SPINDLE_DIRECTION_PIN,   .group = PinGroup_SpindleControl },
 #endif
+#endif
+#if !(AUX_CONTROLS & AUX_CONTROL_COOLANT)
     { .id = Output_CoolantFlood,    .port = COOLANT_FLOOD_PORT,     .pin = COOLANT_FLOOD_PIN,       .group = PinGroup_Coolant },
     { .id = Output_CoolantMist,     .port = COOLANT_MIST_PORT,      .pin = COOLANT_MIST_PIN,        .group = PinGroup_Coolant },
+#endif
 #ifdef RTS_PIN
     { .id = Output_RTS,             .port = RTS_PORT,               .pin = RTS_PIN,                 .group = PinGroup_UART },
 #endif
@@ -210,7 +217,22 @@ static output_signal_t outputpin[] = {
     { .id = Output_Aux1,            .port = AUXOUTPUT1_PORT,        .pin = AUXOUTPUT1_PIN,          .group = PinGroup_AuxOutput },
 #endif
 #ifdef AUXOUTPUT2_PORT
-    { .id = Output_Aux2,            .port = AUXOUTPUT2_PORT,        .pin = AUXOUTPUT2_PIN,          .group = PinGroup_AuxOutput }
+    { .id = Output_Aux2,            .port = AUXOUTPUT2_PORT,        .pin = AUXOUTPUT2_PIN,          .group = PinGroup_AuxOutput },
+#endif
+#ifdef AUXOUTPUT3_PORT
+    { .id = Output_Aux3,            .port = AUXOUTPUT3_PORT,        .pin = AUXOUTPUT3_PIN,          .group = PinGroup_AuxOutput },
+#endif
+#ifdef AUXOUTPUT4_PORT
+    { .id = Output_Aux4,            .port = AUXOUTPUT4_PORT,        .pin = AUXOUTPUT4_PIN,          .group = PinGroup_AuxOutput },
+#endif
+#ifdef AUXOUTPUT5_PORT
+    { .id = Output_Aux5,            .port = AUXOUTPUT5_PORT,        .pin = AUXOUTPUT5_PIN,          .group = PinGroup_AuxOutput },
+#endif
+#ifdef AUXOUTPUT6_PORT
+    { .id = Output_Aux6,            .port = AUXOUTPUT6_PORT,        .pin = AUXOUTPUT6_PIN,          .group = PinGroup_AuxOutput },
+#endif
+#ifdef AUXOUTPUT7_PORT
+    { .id = Output_Aux7,            .port = AUXOUTPUT7_PORT,        .pin = AUXOUTPUT7_PIN,          .group = PinGroup_AuxOutput }
 #endif
 };
 
@@ -749,6 +771,20 @@ static bool aux_claim_explicit (aux_ctrl_t *aux_ctrl)
 
 #endif // AUX_CONTROLS_ENABLED
 
+#if AUX_CONTROLS
+
+bool aux_out_claim_explicit (aux_ctrl_out_t *aux_ctrl)
+{
+    if(ioport_claim(Port_Digital, Port_Output, &aux_ctrl->aux_port, NULL))
+        ioport_assign_out_function(aux_ctrl, &((output_signal_t *)aux_ctrl->output)->id);
+    else
+        aux_ctrl->aux_port = 0xFF;
+
+    return aux_ctrl->aux_port != 0xFF;
+}
+
+#endif // AUX_CONTROLS
+
 #if SPINDLE_ENCODER_ENABLE
 
 inline static float spindle_calc_rpm (uint32_t tpp)
@@ -795,7 +831,7 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     }
 }
 
-#if DRIVER_SPINDLE_PWM_ENABLE
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 
 // Variable spindle control functions
 
@@ -906,7 +942,7 @@ static void spindleSetStateVariable (spindle_ptrs_t *spindle, spindle_state_t st
 #endif
 }
 
-#endif // DRIVER_SPINDLE_PWM_ENABLE
+#endif // DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
@@ -1000,7 +1036,7 @@ bool spindleConfig (spindle_ptrs_t *spindle)
     return true;
 }
 
-#endif // DRIVER_SPINDLE_PWM_ENABLE
+#endif // DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 
 #if SPINDLE_ENCODER_ENABLE
 
@@ -1251,7 +1287,7 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
 
 #endif // SPINDLE_ENCODER_ENABLE
 
-#if DRIVER_SPINDLE_PWM_ENABLE
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
         if(changed.spindle) {
             spindleConfig(spindle_get_hal(spindle_id, SpindleHAL_Configured));
             if(spindle_id == spindle_get_default())
@@ -1587,13 +1623,15 @@ static bool driver_setup (settings_t *settings)
 
  // Spindle init
 
-#if DRIVER_SPINDLE_PWM_ENABLE
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 
-    SPINDLE_PWM_PORT->DIR |= (1 << SPINDLE_PWM_PIN);
-    SPINDLE_PWM_PORT->SEL1 &= ~(1 << SPINDLE_PWM_PIN);
-    SPINDLE_PWM_PORT->SEL0 |= (1 << SPINDLE_PWM_PIN);
+    ((DIO_PORT_Even_Interruptable_Type *)SPINDLE_PWM_PORT)->DIR |= (1 << SPINDLE_PWM_PIN);
+    ((DIO_PORT_Even_Interruptable_Type *)SPINDLE_PWM_PORT)->SEL1 &= ~(1 << SPINDLE_PWM_PIN);
+    ((DIO_PORT_Even_Interruptable_Type *)SPINDLE_PWM_PORT)->SEL0 |= (1 << SPINDLE_PWM_PIN);
     SPINDLE_PWM_TIMER->CTL = TIMER_A_CTL_SSEL__SMCLK;
     SPINDLE_PWM_TIMER->EX0 = 0;
+
+  #if !(AUX_CONTROLS & AUX_CONTROL_SPINDLE)
 
     static const periph_pin_t pwm = {
         .function = Output_SpindlePWM,
@@ -1605,7 +1643,9 @@ static bool driver_setup (settings_t *settings)
 
     hal.periph_port.register_pin(&pwm);
 
-#endif
+  #endif
+
+#endif // DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 
 #if SPINDLE_ENCODER_ENABLE
 
@@ -1708,7 +1748,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "241208";
+    hal.driver_version = "241217";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1767,11 +1807,11 @@ bool driver_init (void)
 
 #if DRIVER_SPINDLE_ENABLE
 
- #if DRIVER_SPINDLE_PWM_ENABLE
+ #if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
 
    static const spindle_ptrs_t spindle = {
        .type = SpindleType_PWM,
-#if DRIVER_SPINDLE_DIR_ENABLE
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_DIR
        .ref_id = SPINDLE_PWM0,
 #else
        .ref_id = SPINDLE_PWM0_NODIR,
@@ -1791,7 +1831,7 @@ bool driver_init (void)
            .variable = On,
            .laser = On,
            .pwm_invert = On,
-   #if DRIVER_SPINDLE_DIR_ENABLE
+   #if DRIVER_SPINDLE_ENABLE & SPINDLE_DIR
            .direction = On
    #endif
        }
@@ -1801,7 +1841,7 @@ bool driver_init (void)
 
    static const spindle_ptrs_t spindle = {
        .type = SpindleType_Basic,
-#if DRIVER_SPINDLE_DIR_ENABLE
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_DIR
        .ref_id = SPINDLE_ONOFF0_DIR,
 #else
        .ref_id = SPINDLE_ONOFF0,
@@ -1810,7 +1850,7 @@ bool driver_init (void)
        .get_state = spindleGetState,
        .cap = {
            .gpio_controlled = On,
-  #if DRIVER_SPINDLE_DIR_ENABLE
+  #if DRIVER_SPINDLE_ENABLE & SPINDLE_DIR
            .direction = On
   #endif
        }
@@ -1836,7 +1876,7 @@ bool driver_init (void)
     hal.limits_cap = get_limits_cap();
     hal.home_cap = get_home_cap();
     hal.driver_cap.spindle_sync = On;
-#if DRIVER_SPINDLE_PWM_ENABLE && defined(SPINDLE_RPM_CONTROLLED)
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM && defined(SPINDLE_RPM_CONTROLLED)
     hal.driver_cap.spindle_pid = On;
 #endif
 #if SPINDLE_ENCODER_ENABLE
@@ -1845,12 +1885,7 @@ bool driver_init (void)
 #if SPINDLE_SYNC_ENABLE
     hal.driver_cap.spindle_sync = On;
 #endif
-#ifdef COOLANT_FLOOD_PIN
-    hal.coolant_cap.flood = On;
-#endif
-#ifdef COOLANT_MIST_PIN
-    hal.coolant_cap.mist = On;
-#endif
+    hal.coolant_cap.bits = COOLANT_ENABLE;
     hal.driver_cap.software_debounce = On;
     hal.driver_cap.step_pulse_delay = On;
     hal.driver_cap.amass_level = 3;
@@ -1898,7 +1933,11 @@ bool driver_init (void)
         if(output->group == PinGroup_AuxOutput) {
             if(aux_outputs.pins.outputs == NULL)
                 aux_outputs.pins.outputs = output;
-            output->id = (pin_function_t)(Output_Aux0 + aux_outputs.n_pins++);
+            output->id = (pin_function_t)(Output_Aux0 + aux_outputs.n_pins);
+#if AUX_CONTROLS
+            aux_out_remap_explicit(output->port, output->pin, aux_outputs.n_pins, output);
+#endif
+            aux_outputs.n_pins++;
         }
     }
 
@@ -1906,6 +1945,10 @@ bool driver_init (void)
 
 #if AUX_CONTROLS_ENABLED
     aux_ctrl_claim_ports(aux_claim_explicit, NULL);
+#endif
+
+#if AUX_CONTROLS
+    aux_ctrl_claim_out_ports(aux_out_claim_explicit, NULL);
 #endif
 
 #include "grbl/plugins_init.h"

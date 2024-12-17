@@ -120,12 +120,47 @@
 
 #endif
 
-// Define flood and mist coolant output pins.
+// Define auxiliary output pins
+#define AUXOUTPUT0_PORT         port(B)
+#define AUXOUTPUT0_PIN          7
+#define AUXOUTPUT1_PORT         port(C)
+#define AUXOUTPUT1_PIN          0
+#define AUXOUTPUT2_PORT         port(A) // Spindle PWM
+#define AUXOUTPUT2_PIN          5
+#define AUXOUTPUT3_PORT         port(C) // Spindle direction
+#define AUXOUTPUT3_PIN          4
+#define AUXOUTPUT4_PORT         port(B) // Spindle enable
+#define AUXOUTPUT4_PIN          15
+#define AUXOUTPUT5_PORT         port(C) // Coolant flood
+#define AUXOUTPUT5_PIN          1
+#define AUXOUTPUT6_PORT         port(B) // Coolant mist
+#define AUXOUTPUT6_PIN          5
 
-#define COOLANT_FLOOD_PORT      port(C)
-#define COOLANT_FLOOD_PIN       1
-#define COOLANT_MIST_PORT       port(B)
-#define COOLANT_MIST_PIN        5
+// Define driver spindle pins
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_ENA
+#define SPINDLE_ENABLE_PORT     AUXOUTPUT4_PORT
+#define SPINDLE_ENABLE_PIN      AUXOUTPUT4_PIN
+#endif
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
+#define SPINDLE_PWM_PORT        AUXOUTPUT2_PORT
+#define SPINDLE_PWM_PIN         AUXOUTPUT2_PIN
+#endif
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_DIR
+#define SPINDLE_DIRECTION_PORT  AUXOUTPUT3_PORT
+#define SPINDLE_DIRECTION_PIN   AUXOUTPUT3_PIN
+#endif
+
+#define SPINDLE_PID_SAMPLE_RATE 5 // ms
+
+// Define flood and mist coolant enable output pins.
+#if COOLANT_ENABLE & COOLANT_FLOOD
+#define COOLANT_FLOOD_PORT      AUXOUTPUT5_PORT
+#define COOLANT_FLOOD_PIN       AUXOUTPUT5_PIN
+#endif
+#if COOLANT_ENABLE & COOLANT_MIST
+#define COOLANT_MIST_PORT       AUXOUTPUT6_PORT
+#define COOLANT_MIST_PIN        AUXOUTPUT6_PIN
+#endif
 
 // Define user-control controls (cycle start, reset, feed hold) input pins.
 
@@ -150,44 +185,6 @@
 #define CONTROL_INMODE          GPIO_BITBAND
 
 #endif
-
-// Define driver spindle pins
-
-#if DRIVER_SPINDLE_PWM_ENABLE
-#define SPINDLE_PWM_PORT        P2
-#define SPINDLE_PWM_PIN         5
-#else
-#define AUXOUTPUT0_PORT         GPIOA
-#define AUXOUTPUT0_PIN          8
-#endif
-
-#if DRIVER_SPINDLE_DIR_ENABLE
-#define SPINDLE_DIRECTION_PORT  port(C)
-#define SPINDLE_DIRECTION_PIN   4
-#else
-#define AUXOUTPUT1_PORT         port(C)
-#define AUXOUTPUT1_PIN          4
-#endif
-
-#if DRIVER_SPINDLE_ENABLE
-#define SPINDLE_ENABLE_PORT     port(B)
-#define SPINDLE_ENABLE_PIN      15
-#else
-#define AUXOUTPUT2_PORT         port(B)
-#define AUXOUTPUT2_PIN          15
-#endif
-
-#define SPINDLE_PID_SAMPLE_RATE 5 // ms
-
-/*
- * CNC Boosterpack GPIO assignments
- */
-
-#define AUXOUTPUT0_PORT         port(B)
-#define AUXOUTPUT0_PIN          7
-
-#define AUXOUTPUT1_PORT         port(C)
-#define AUXOUTPUT1_PIN          0
 
 // Normally used as MPG mode input
 #define GPIO2_PN                5
