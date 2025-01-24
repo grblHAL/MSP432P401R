@@ -3,20 +3,20 @@
 
   Part of grblHAL driver for MSP432P401R
 
-  Copyright (c) 2018-2024 Terje Io
+  Copyright (c) 2018-2025 Terje Io
 
-  Grbl is free software: you can redistribute it and/or modify
+  grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  grblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
+  along with grblHAL. If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -254,16 +254,16 @@ void i2c_get_keycode (uint_fast16_t i2cAddr, keycode_callback_ptr callback)
 
 #if TRINAMIC_ENABLE && TRINAMIC_I2C
 
-static uint8_t axis = 0xFF;
+#include "trinamic/tmc_i2c_interface.h"
 
-TMCI2C_enable_dgr_t dgr_enable = {
-    .addr.value = TMC_I2CReg_ENABLE
-};
+static uint8_t axis = 0xFF;
 
 TMC_spi_status_t tmc_spi_read (trinamic_motor_t driver, TMC_spi_datagram_t *datagram)
 {
     uint8_t *res;
     TMC_spi_status_t status = 0;
+
+    while(i2cIsBusy);
 
     if(driver.axis != axis) {
         i2c.buffer[0] = driver.axis | 0x80;
@@ -313,23 +313,7 @@ TMC_spi_status_t tmc_spi_write (trinamic_motor_t driver, TMC_spi_datagram_t *dat
     return status;
 }
 
-static void trinamic_stepper_enable (axes_signals_t enable)
-{
-    enable.mask ^= settings.steppers.enable_invert.mask;
-
-    dgr_enable.reg.enable.mask = enable.mask & driver_enabled.mask;
-
-    tmc_spi_write((trinamic_motor_t){0}, (TMC_spi_datagram_t *)&dgr_enable);
-}
-
-void motor_postinit (motor_map_t motor, const tmchal_t *driver)
-{
-    dgr_enable.reg.monitor.mask |= 1 << motor.axis;
-
-    tmc_spi_write((trinamic_motor_t){0}, (TMC_spi_datagram_t *)&dgr_enable);
-}
-
-#endif
+#endif // TRINAMIC_ENABLE
 
 #define I2C_SCL_PIN 4
 #define I2C_SDA_PIN 5
@@ -373,18 +357,6 @@ void i2c_init (void)
 
     hal.periph_port.register_pin(&scl);
     hal.periph_port.register_pin(&sda);
-
-#if TRINAMIC_ENABLE && TRINAMIC_I2C
-    static trinamic_driver_if_t driver_if = {
-        .on_drivers_init = if_init,
-        .on_motor_postinit = motor_postinit
-    };
-
-    stepper_enable = hal.stepper.enable;
-    hal.stepper.enable = trinamic_stepper_enable;
-
-    trinamic_if_init(&driver_if);
-#endif
 }
 
 void I2C_IRQHandler (void)

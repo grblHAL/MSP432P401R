@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2024 Terje Io
+  Copyright (c) 2017-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -144,20 +144,25 @@
 
 // Define timer registers
 
-#define STEPPER_TIM        1
-#define STEPPER_TIMER      timer32(STEPPER_TIM)
-#define STEPPER_TIMER_INT  timer32INT(STEPPER_TIM)
-#define STEPPER_IRQHandler timer32HANDLER(STEPPER_TIM)
+#define STEPPER_TIM             1
+#define STEPPER_TIMER           timer32(STEPPER_TIM)
+#define STEPPER_TIMER_INT       timer32INT(STEPPER_TIM)
+#define STEPPER_IRQHandler      timer32HANDLER(STEPPER_TIM)
 
-#define PULSE_TIM              A2
-#define PULSE_TIMER            timer(PULSE_TIM)
-#define PULSE_TIMER_INT0       timerINT0(PULSE_TIM)
-#define PULSE_TIMER_INTN       timerINTN(PULSE_TIM)
-#define STEPPULSE_0_IRQHandler timerHANDLER0(PULSE_TIM)
-#define STEPPULSE_N_IRQHandler timerHANDLERN(PULSE_TIM)
+#define PULSE_TIM               A2
+#define PULSE_TIMER             timer(PULSE_TIM)
+#define PULSE_TIMER_INT0        timerINT0(PULSE_TIM)
+#define PULSE_TIMER_INTN        timerINTN(PULSE_TIM)
+#define STEPPULSE_0_IRQHandler  timerHANDLER0(PULSE_TIM)
+#define STEPPULSE_N_IRQHandler  timerHANDLERN(PULSE_TIM)
 
-#define SPINDLE_PWM_TIM   A0
-#define SPINDLE_PWM_TIMER timer(SPINDLE_PWM_TIM)
+#define SPINDLE_PWM_TIM         A0
+#define SPINDLE_PWM_TIMER       timer(SPINDLE_PWM_TIM)
+
+#define AUX0_PWM_TIM            A1
+#define AUX0_PWM_TIMER          timer(AUX0_PWM_TIM)
+
+// spindle sync
 
 #define RPM_CNT                 A1
 #define RPM_COUNTER             timer(RPM_CNT)
@@ -189,12 +194,19 @@ typedef struct {
 } input_signal_t;
 
 typedef struct {
+    float value;
+    ioports_pwm_t data;
+    const Timer_A_Type *port;
+} pwm_out_t;
+
+typedef struct {
     pin_function_t id;
     DIO_PORT_Interruptable_Type *port;
     uint8_t pin;
     pin_group_t group;
     pin_mode_t mode;
     const char *description;
+    pwm_out_t *pwm;
 } output_signal_t;
 
 typedef struct {
@@ -211,6 +223,7 @@ bool driver_init (void);
 uint32_t xTaskGetTickCount();
 
 void ioports_init(pin_group_pins_t *aux_inputs, pin_group_pins_t *aux_outputs);
+void ioports_init_analog(pin_group_pins_t *aux_inputs, pin_group_pins_t *aux_outputs);
 void ioports_event (input_signal_t *input);
 
 #endif // __DRIVER_H__

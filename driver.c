@@ -121,9 +121,9 @@ static input_signal_t inputpin[] = {
 #endif
 #if TRINAMIC_ENABLE == 2130
 #if TRINAMIC_I2C
-    { .id = Input_MotorWarning,   .port = TRINAMIC_WARN_IRQ_PORT, .pin = TRINAMIC_WARN_IRQ_PIN,   .group = PinGroup_Motor_Warning },
+  ,  { .id = Input_MotorWarning,   .port = TRINAMIC_WARN_IRQ_PORT, .pin = TRINAMIC_WARN_IRQ_PIN,   .group = PinGroup_Motor_Warning }
 #endif
-    { .id = Input_MotorFault,     .port = TRINAMIC_DIAG_IRQ_PORT, .pin = TRINAMIC_DIAG_IRQ_PIN,   .group = PinGroup_Motor_Fault },
+  ,  { .id = Input_MotorFault,     .port = TRINAMIC_DIAG_IRQ_PORT, .pin = TRINAMIC_DIAG_IRQ_PIN,   .group = PinGroup_Motor_Fault }
 #endif
 // Aux input pins must be consecutive in this array
 #ifdef AUXINPUT0_PIN
@@ -233,6 +233,16 @@ static output_signal_t outputpin[] = {
 #endif
 #ifdef AUXOUTPUT7_PORT
     { .id = Output_Aux7,            .port = AUXOUTPUT7_PORT,        .pin = AUXOUTPUT7_PIN,          .group = PinGroup_AuxOutput }
+#endif
+#ifdef AUXOUTPUT0_ANALOG_PORT
+    { .id = Output_Analog_Aux0,     .port = AUXOUTPUT0_ANALOG_PORT, .pin = AUXOUTPUT0_ANALOG_PIN,   .group = PinGroup_AuxOutputAnalog },
+#elif defined(AUXOUTPUT0_PWM_PORT)
+    { .id = Output_Analog_Aux0,     .port = AUXOUTPUT0_PWM_PORT,    .pin = AUXOUTPUT0_PWM_PIN,      .group = PinGroup_AuxOutputAnalog, .mode = { PINMODE_PWM } },
+#endif
+#ifdef AUXOUTPUT1_ANALOG_PORT
+    { .id = Output_Analog_Aux1,     .port = AUXOUTPUT1_ANALOG_PORT, .pin = AUXOUTPUT1_ANALOG_PIN,   .group = PinGroup_AuxOutputAnalog }
+#elif defined(AUXOUTPUT1_PWM_PORT)
+    { .id = Output_Analog_Aux1,     .port = AUXOUTPUT1_PWM_PORT,    .pin = AUXOUTPUT1_PWM_PIN,      .group = PinGroup_AuxOutputAnalog, .mode = { PINMODE_PWM } }
 #endif
 };
 
@@ -1748,7 +1758,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "241217";
+    hal.driver_version = "240124";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1892,7 +1902,7 @@ bool driver_init (void)
     hal.driver_cap.control_pull_up = On;
     hal.driver_cap.limits_pull_up = On;
 
-    static pin_group_pins_t aux_inputs = {0}, aux_outputs = {0};
+    static pin_group_pins_t aux_inputs = {0}, aux_outputs = {0}, aux_ainputs = {0}, aux_aoutputs = {0};
 
     uint32_t i;
     input_signal_t *input;
@@ -1939,9 +1949,16 @@ bool driver_init (void)
 #endif
             aux_outputs.n_pins++;
         }
+        if(output->group == PinGroup_AuxOutputAnalog) {
+            if(aux_aoutputs.pins.outputs == NULL)
+                aux_aoutputs.pins.outputs = output;
+            output->id = (pin_function_t)(Output_Analog_Aux0 + aux_aoutputs.n_pins);
+            aux_aoutputs.n_pins++;
+        }
     }
 
     ioports_init(&aux_inputs, &aux_outputs);
+    ioports_init_analog(&aux_ainputs, &aux_aoutputs);
 
 #if AUX_CONTROLS_ENABLED
     aux_ctrl_claim_ports(aux_claim_explicit, NULL);

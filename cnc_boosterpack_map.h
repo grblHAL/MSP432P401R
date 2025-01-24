@@ -6,7 +6,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2024 Terje Io
+  Copyright (c) 2017-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -125,7 +125,7 @@
 #define AUXOUTPUT0_PIN          7
 #define AUXOUTPUT1_PORT         port(C)
 #define AUXOUTPUT1_PIN          0
-#define AUXOUTPUT2_PORT         port(A) // Spindle PWM
+#define AUXOUTPUT2_PORT         port(2) // Spindle PWM
 #define AUXOUTPUT2_PIN          5
 #define AUXOUTPUT3_PORT         port(C) // Spindle direction
 #define AUXOUTPUT3_PIN          4
@@ -135,6 +135,12 @@
 #define AUXOUTPUT5_PIN          1
 #define AUXOUTPUT6_PORT         port(B) // Coolant mist
 #define AUXOUTPUT6_PIN          5
+
+#define AUXOUTPUT0_PWM_PORT     port(7)
+#define AUXOUTPUT0_PWM_PIN      6
+
+#define AUX_ANALOG 1
+
 
 // Define driver spindle pins
 #if DRIVER_SPINDLE_ENABLE & SPINDLE_ENA
