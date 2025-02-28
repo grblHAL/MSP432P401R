@@ -93,14 +93,19 @@ bool i2c_selftest (void)
     return (P6->IN & (BIT4|BIT5)) == (BIT4|BIT5);
 }
 
-bool i2c_send (uint_fast16_t i2cAddr, uint8_t *buf, size_t size, bool block)
+bool i2c_probe (i2c_address_t i2cAddr)
+{
+    return true;
+}
+
+bool i2c_send (i2c_address_t addr, uint8_t *buf, size_t size, bool block)
 {
     while(i2cIsBusy);
 
     i2c.count = size;
-    i2c.data  = buf;
+    i2c.data  = buf ? buf : i2c.buffer;
     i2c.state = size == 1 ? I2CState_SendLast : (size == 2 ? I2CState_SendNext : I2CState_SendNext);
-    I2C_PORT->I2CSA = i2cAddr;
+    I2C_PORT->I2CSA = addr;
     I2C_PORT->IFG &= ~(EUSCI_B_IFG_TXIFG0|EUSCI_B_IFG_RXIFG0);          // Clear interrupt flags
     I2C_PORT->IE |= EUSCI_B_IE_TXIE0;
     I2C_PORT->CTLW0 |= EUSCI_B_CTLW0_TR|EUSCI_B_CTLW0_TXSTT;
@@ -111,11 +116,11 @@ bool i2c_send (uint_fast16_t i2cAddr, uint8_t *buf, size_t size, bool block)
     return true;
 }
 
-static uint8_t *I2C_Receive (uint32_t i2cAddr, uint32_t bytes, bool block)
+bool i2c_receive (i2c_address_t i2cAddr, uint8_t *buf, size_t bytes, bool block)
 {
     while(i2cIsBusy);
 
-    i2c.data  = i2c.buffer;
+    i2c.data  = buf ? buf : i2c.buffer;
     i2c.count = bytes;
     i2c.state = bytes == 1 ? I2CState_ReceiveLast : (bytes == 2 ? I2CState_ReceiveNextToLast : I2CState_ReceiveNext);
 
@@ -131,28 +136,12 @@ static uint8_t *I2C_Receive (uint32_t i2cAddr, uint32_t bytes, bool block)
     if(block)
         while(i2cIsBusy);
 
-    return i2c.buffer;
+    return true;
 }
 
 #if (TRINAMIC_ENABLE == 2130 && TRINAMIC_I2C) || ATC_ENABLE
 
-void I2C_Send (uint32_t i2cAddr, uint8_t bytes, bool block)
-{
-    while(i2cIsBusy);
-
-    i2c.count = bytes;
-    i2c.data  = i2c.buffer;
-    i2c.state = bytes == 1 ? I2CState_SendLast : (bytes == 2 ? I2CState_SendLast : I2CState_SendNext);
-    I2C_PORT->IFG &= ~(EUSCI_B_IFG_TXIFG0|EUSCI_B_IFG_RXIFG0);          // Clear interrupt flags
-    I2C_PORT->IE |= EUSCI_B_IE_TXIE0;
-    I2C_PORT->I2CSA = i2cAddr;
-    I2C_PORT->CTLW0 |= EUSCI_B_CTLW0_TR|EUSCI_B_CTLW0_TXSTT;
-
-    if(block)
-        while(i2cIsBusy);
-}
-
-static uint8_t *I2C_ReadRegister (uint32_t i2cAddr, uint8_t bytes, bool block)
+static uint8_t *I2C_ReadRegister (i2c_address_t i2cAddr, uint8_t bytes, bool block)
 {
     while(i2cIsBusy);
 
@@ -171,8 +160,6 @@ static uint8_t *I2C_ReadRegister (uint32_t i2cAddr, uint8_t bytes, bool block)
 }
 
 #endif
-
-#if EEPROM_ENABLE
 
 /* could not get ACK polling to work...
 static void WaitForACK (void)
@@ -195,7 +182,7 @@ static void WaitForACK (void)
 //    while (EUSCI_B1->CTLW0 & EUSCI_B_CTLW0_TXSTP);               // Ensure stop condition got sent
 }
 */
-nvs_transfer_result_t i2c_nvs_transfer (nvs_transfer_t *i2c, bool read)
+bool i2c_transfer (i2c_transfer_t *i2c, bool read)
 {
     bool single = i2c->count == 1;
 
@@ -204,7 +191,7 @@ nvs_transfer_result_t i2c_nvs_transfer (nvs_transfer_t *i2c, bool read)
     EUSCI_B1->IFG &= ~(EUSCI_B_IFG_TXIFG0|EUSCI_B_IFG_RXIFG0);          // clear interrupts
     EUSCI_B1->CTLW0 |= EUSCI_B_CTLW0_TR|EUSCI_B_CTLW0_TXSTT;            // Transmit start condition and address
     while(!(EUSCI_B1->IFG & EUSCI_B_IFG_TXIFG0));                       // Wait for TX completed
-    EUSCI_B1->TXBUF = i2c->word_addr;                                    // Transmit data address LSB
+    EUSCI_B1->TXBUF = i2c->word_addr;                                   // Transmit data address LSB
     while(!(EUSCI_B1->IFG & EUSCI_B_IFG_TXIFG0));                       // Wait for TX completed
 
     if(read) {                                                          // Read data from EEPROM:
@@ -216,7 +203,7 @@ nvs_transfer_result_t i2c_nvs_transfer (nvs_transfer_t *i2c, bool read)
         else                                                            // else
             EUSCI_B1->CTLW0 |= EUSCI_B_CTLW0_TXSTT;                     // restart condition only
 
-        while(i2c->count) {                                              // Read data...
+        while(i2c->count) {                                             // Read data...
             if(!single && i2c->count == 1) {
                 EUSCI_B1->CTLW0 |= EUSCI_B_CTLW0_TXSTP;
                 while (EUSCI_B1->CTLW0 & EUSCI_B_CTLW0_TXSTP) {
@@ -238,18 +225,16 @@ nvs_transfer_result_t i2c_nvs_transfer (nvs_transfer_t *i2c, bool read)
     }
     while (EUSCI_B1->CTLW0 & EUSCI_B_CTLW0_TXSTP);                      // Ensure stop condition got sent
 
-    return NVS_TransferResult_OK;
+    return ok;
 }
 
-#endif
-
-void i2c_get_keycode (uint_fast16_t i2cAddr, keycode_callback_ptr callback)
+bool i2c_get_keycode (uint_fast16_t i2cAddr, keycode_callback_ptr callback)
 {
     while(i2cIsBusy);
 
     i2c.keycode_callback = callback;
 
-    I2C_Receive(i2cAddr, 1, false);
+    return i2c_receive(i2cAddr, NULL, 1, false);
 }
 
 #if TRINAMIC_ENABLE && TRINAMIC_I2C
@@ -267,7 +252,7 @@ TMC_spi_status_t tmc_spi_read (trinamic_motor_t driver, TMC_spi_datagram_t *data
 
     if(driver.axis != axis) {
         i2c.buffer[0] = driver.axis | 0x80;
-        I2C_Send(I2C_ADR_I2CBRIDGE, 1, true);
+        i2c_send(I2C_ADR_I2CBRIDGE, NULL, 1, true);
 
         axis = driver.axis;
     }
@@ -293,7 +278,7 @@ TMC_spi_status_t tmc_spi_write (trinamic_motor_t driver, TMC_spi_datagram_t *dat
 
     if(driver.axis != axis) {
         i2c.buffer[0] = driver.axis | 0x80;
-        I2C_Send(I2C_ADR_I2CBRIDGE, 1, true);
+        i2c_send(I2C_ADR_I2CBRIDGE, NULL, 1, true);
 
         while(i2cIsBusy);
 
@@ -308,7 +293,7 @@ TMC_spi_status_t tmc_spi_write (trinamic_motor_t driver, TMC_spi_datagram_t *dat
     i2c.buffer[4] = datagram->payload.value & 0xFF;
     datagram->addr.write = 0;
 
-    I2C_Send(I2C_ADR_I2CBRIDGE, 5, true);
+    i2c_send(I2C_ADR_I2CBRIDGE, NULL, 5, true);
 
     return status;
 }
@@ -318,8 +303,13 @@ TMC_spi_status_t tmc_spi_write (trinamic_motor_t driver, TMC_spi_datagram_t *dat
 #define I2C_SCL_PIN 4
 #define I2C_SDA_PIN 5
 
-void i2c_init (void)
+i2c_cap_t i2c_start (void)
 {
+    static i2c_cap_t cap = {};
+
+    if(cap.started)
+        return cap;
+
     memset(&i2c, 0, sizeof(i2c_tr_trans_t));
 
     P6->SEL0 |= (1<<I2C_SCL_PIN)|(1<<I2C_SDA_PIN);                                  // Assign I2C pins to USCI_B1
@@ -327,7 +317,7 @@ void i2c_init (void)
     if(!i2c_selftest()) {
         protocol_enqueue_foreground_task(report_warning, "I2C bus error!");
         system_raise_alarm(Alarm_SelftestFailed);
-        return;
+        return cap;
     }
 
     I2C_PORT->CTLW0 |= EUSCI_B_CTLW0_SWRST;                                         // Put I2C_PORT in reset state
@@ -357,6 +347,10 @@ void i2c_init (void)
 
     hal.periph_port.register_pin(&scl);
     hal.periph_port.register_pin(&sda);
+
+    cap.started = cap.tx_non_blocking = On;
+
+    return cap;
 }
 
 void I2C_IRQHandler (void)

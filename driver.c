@@ -117,13 +117,7 @@ static input_signal_t inputpin[] = {
   , { .id = Input_LimitsOverride, .port = LIMITS_OVERRIDE_PORT, .pin = LIMITS_OVERRIDE_PIN, .group = PinGroup_Limit }
 #endif
 #if SPINDLE_ENCODER_ENABLE
-  , { .id = Input_SpindleIndex,   .port = SPINDLE_INDEX_PORT,     .pin = SPINDLE_INDEX_PIN,       .group = PinGroup_QEI_Index }
-#endif
-#if TRINAMIC_ENABLE == 2130
-#if TRINAMIC_I2C
-  ,  { .id = Input_MotorWarning,   .port = TRINAMIC_WARN_IRQ_PORT, .pin = TRINAMIC_WARN_IRQ_PIN,   .group = PinGroup_Motor_Warning }
-#endif
-  ,  { .id = Input_MotorFault,     .port = TRINAMIC_DIAG_IRQ_PORT, .pin = TRINAMIC_DIAG_IRQ_PIN,   .group = PinGroup_Motor_Fault }
+  , { .id = Input_SpindleIndex,   .port = SPINDLE_INDEX_PORT,   .pin = SPINDLE_INDEX_PIN,   .group = PinGroup_QEI_Index }
 #endif
 // Aux input pins must be consecutive in this array
 #ifdef AUXINPUT0_PIN
@@ -1411,12 +1405,6 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
                     input->mode.irq_mode = IRQ_Mode_Falling;
                     break;
 
-                case Input_MotorWarning:
-                case Input_MotorFault:
-                    input->mode.pull_mode = PullMode_Up;
-                    input->mode.irq_mode = IRQ_Mode_Falling;
-                    break;
-
                 default:
                     break;
             }
@@ -1758,7 +1746,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "240124";
+    hal.driver_version = "240228";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1800,10 +1788,6 @@ bool driver_init (void)
     hal.periph_port.set_pin_description = setPeriphPinDescription;
 
     stream_connect(serialInit(115200));
-
-#if I2C_ENABLE
-    i2c_init();
-#endif
 
 #if EEPROM_ENABLE
     i2c_eeprom_init();
@@ -2121,16 +2105,6 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t **inputs
                 case PinGroup_Keypad:
                     if(i2c_strobe.callback)
                         i2c_strobe.callback(0, !BITBAND_PERI(I2C_STROBE_PORT->IN, I2C_STROBE_PIN));
-                    break;
-#endif
-
-#if TRINAMIC_ENABLE && TRINAMIC_I2C
-                case PinGroup_Motor_Warning:
-                    trinamic_warn_handler();
-                    break;
-
-                case PinGroup_Motor_Fault:
-                    trinamic_fault_handler();
                     break;
 #endif
 
