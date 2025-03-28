@@ -225,7 +225,7 @@ bool i2c_transfer (i2c_transfer_t *i2c, bool read)
     }
     while (EUSCI_B1->CTLW0 & EUSCI_B_CTLW0_TXSTP);                      // Ensure stop condition got sent
 
-    return ok;
+    return true;
 }
 
 bool i2c_get_keycode (uint_fast16_t i2cAddr, keycode_callback_ptr callback)

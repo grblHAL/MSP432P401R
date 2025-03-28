@@ -247,7 +247,7 @@ static bool IOInitDone = false;
 // Inverts the probe pin state depending on user settings and probing cycle mode.
 static uint16_t pulse_length;
 static volatile uint32_t elapsed_tics = 0;
-static axes_signals_t next_step_outbits;
+static axes_signals_t next_step_out;
 
 #if SPINDLE_ENCODER_ENABLE
 
@@ -406,12 +406,14 @@ static void stepperPulseStart (stepper_t *stepper)
             return;
         }
 #endif
-        if(stepper->dir_change)
-            set_dir_outputs(stepper->dir_outbits);
+        if(stepper->dir_changed.bits) {
+            stepper->dir_changed.bits = 0;
+            set_dir_outputs(stepper->dir_out);
+        }
     }
 
-    if(stepper->step_outbits.value) {
-        set_step_outputs(stepper->step_outbits);
+    if(stepper->step_out.bits) {
+        set_step_outputs(stepper->step_out);
         PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
     }
 }
@@ -429,24 +431,32 @@ static void stepperPulseStartDelayed (stepper_t *stepper)
             return;
         }
 #endif
-        if(stepper->dir_change) {
+        if(stepper->dir_changed.bits) {
 
-            set_dir_outputs(stepper->dir_outbits);
+            set_dir_outputs(stepper->dir_out);
 
-            if(stepper->step_outbits.value) {
-                next_step_outbits = stepper->step_outbits;              // Store out_bits
-                PULSE_TIMER->CCR[0] = 0;
-                PULSE_TIMER->CCTL[1] &= ~TIMER_A_CCTLN_CCIFG;           // Clear and
-                PULSE_TIMER->CCTL[1] |= TIMER_A_CCTLN_CCIE;             // enable CCR1 interrupt
-                PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
+            if(stepper->step_out.bits) {
 
+                if(stepper->step_out.bits & stepper->dir_changed.bits) {
+                    next_step_out = stepper->step_out;              // Store out_bits
+                    PULSE_TIMER->CCR[0] = 0;
+                    PULSE_TIMER->CCTL[1] &= ~TIMER_A_CCTLN_CCIFG;   // Clear and
+                    PULSE_TIMER->CCTL[1] |= TIMER_A_CCTLN_CCIE;     // enable CCR1 interrupt
+                    PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
+                } else {
+                    set_step_outputs(stepper->step_out);
+                    PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
+                }
             }
+
+            stepper->dir_changed.bits = 0;
+
             return;
         }
     }
 
-    if(stepper->step_outbits.value) {
-        set_step_outputs(stepper->step_outbits);
+    if(stepper->step_out.bits) {
+        set_step_outputs(stepper->step_out);
         PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
     }
 }
@@ -468,7 +478,7 @@ static void stepperPulseStartSynchronized (stepper_t *stepper)
             return;
         }
         sync = true;
-        set_dir_outputs(stepper->dir_outbits);
+        set_dir_outputs(stepper->dir_out);
         spindle_tracker.programmed_rate = stepper->exec_block->programmed_rate;
         spindle_tracker.steps_per_mm = stepper->exec_block->steps_per_mm;
         spindle_tracker.segment_id = 0;
@@ -481,8 +491,8 @@ static void stepperPulseStartSynchronized (stepper_t *stepper)
 #endif
     }
 
-    if(stepper->step_outbits.value) {
-        set_step_outputs(stepper->step_outbits);
+    if(stepper->step_out.bits) {
+        set_step_outputs(stepper->step_out);
         PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
     }
 
@@ -1746,7 +1756,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "240228";
+    hal.driver_version = "240327";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1991,7 +2001,7 @@ void STEPPER_IRQHandler (void)
 void STEPPULSE_N_IRQHandler (void)
 {
     if(PULSE_TIMER->IV == 0x02) {                               // CCR1 - IV read clears interrupt
-        set_step_outputs(next_step_outbits);                    // Begin step pulse
+        set_step_outputs(next_step_out);                    // Begin step pulse
         PULSE_TIMER->CCTL[1] &= ~TIMER_A_CCTLN_CCIE;            // Disable CCR1 interrupt
         PULSE_TIMER->CCR[0] = pulse_length;                     // Set pulse length
         PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;    // and restart timer
