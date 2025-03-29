@@ -333,7 +333,7 @@ inline __attribute__((always_inline)) static void set_step_outputs (axes_signals
 
 // Set stepper direction output pins
 // NOTE: see note for set_step_outputs()
-inline __attribute__((always_inline)) static void set_dir_outputs (axes_signals_t dir_outbits)
+/*inline __attribute__((always_inline))*/ static void set_dir_outputs (axes_signals_t dir_outbits)
 {
 #if DIRECTION_OUTMODE == GPIO_BITBAND
     dir_outbits.value ^= settings.steppers.dir_invert.mask;
@@ -381,6 +381,7 @@ static void stepperGoIdle (bool clear_signals)
 {
     STEPPER_TIMER->CONTROL &= ~(TIMER32_CONTROL_ENABLE|TIMER32_CONTROL_IE);
     STEPPER_TIMER->INTCLR = 0;
+
     if(clear_signals) {
         set_step_outputs((axes_signals_t){0});
         set_dir_outputs((axes_signals_t){0});
@@ -397,19 +398,18 @@ static void stepperCyclesPerTick (uint32_t cycles_per_tick)
 // If spindle synchronized motion switch to PID version.
 static void stepperPulseStart (stepper_t *stepper)
 {
-    if(stepper->new_block) {
 #if SPINDLE_ENCODER_ENABLE
-        if(stepper->exec_segment->spindle_sync) {
-            spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
-            hal.stepper.pulse_start = stepperPulseStartSynchronized;
-            hal.stepper.pulse_start(stepper);
-            return;
-        }
+    if(stepper->new_block && stepper->exec_segment->spindle_sync) {
+        spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
+        hal.stepper.pulse_start = stepperPulseStartSynchronized;
+        hal.stepper.pulse_start(stepper);
+        return;
+    }
 #endif
-        if(stepper->dir_changed.bits) {
-            stepper->dir_changed.bits = 0;
-            set_dir_outputs(stepper->dir_out);
-        }
+
+    if(stepper->dir_changed.bits) {
+        stepper->dir_changed.bits = 0;
+        set_dir_outputs(stepper->dir_out);
     }
 
     if(stepper->step_out.bits) {
@@ -422,37 +422,35 @@ static void stepperPulseStart (stepper_t *stepper)
 // If spindle synchronized motion switch to PID version.
 static void stepperPulseStartDelayed (stepper_t *stepper)
 {
-    if(stepper->new_block) {
 #if SPINDLE_ENCODER_ENABLE
-        if(stepper->exec_segment->spindle_sync) {
-            spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
-            hal.stepper.pulse_start = stepperPulseStartSynchronized;
-            hal.stepper.pulse_start(stepper);
-            return;
-        }
+    if(stepper->new_block && stepper->exec_segment->spindle_sync) {
+        spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
+        hal.stepper.pulse_start = stepperPulseStartSynchronized;
+        hal.stepper.pulse_start(stepper);
+        return;
+    }
 #endif
-        if(stepper->dir_changed.bits) {
+    if(stepper->dir_changed.bits) {
 
-            set_dir_outputs(stepper->dir_out);
+        set_dir_outputs(stepper->dir_out);
 
-            if(stepper->step_out.bits) {
+        if(stepper->step_out.bits) {
 
-                if(stepper->step_out.bits & stepper->dir_changed.bits) {
-                    next_step_out = stepper->step_out;              // Store out_bits
-                    PULSE_TIMER->CCR[0] = 0;
-                    PULSE_TIMER->CCTL[1] &= ~TIMER_A_CCTLN_CCIFG;   // Clear and
-                    PULSE_TIMER->CCTL[1] |= TIMER_A_CCTLN_CCIE;     // enable CCR1 interrupt
-                    PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
-                } else {
-                    set_step_outputs(stepper->step_out);
-                    PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
-                }
+            if(stepper->step_out.bits & stepper->dir_changed.bits) {
+                next_step_out = stepper->step_out;              // Store out_bits
+                PULSE_TIMER->CCR[0] = 0;
+                PULSE_TIMER->CCTL[1] &= ~TIMER_A_CCTLN_CCIFG;   // Clear and
+                PULSE_TIMER->CCTL[1] |= TIMER_A_CCTLN_CCIE;     // enable CCR1 interrupt
+                PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
+            } else {
+                set_step_outputs(stepper->step_out);
+                PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
             }
-
-            stepper->dir_changed.bits = 0;
-
-            return;
         }
+
+        stepper->dir_changed.bits = 0;
+
+        return;
     }
 
     if(stepper->step_out.bits) {
@@ -1312,6 +1310,9 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
         if(!hal.spindle_data.get)
             BITBAND_PERI(SPINDLE_INDEX_PORT->IE, SPINDLE_INDEX_PIN) = 0;
 #endif
+
+        hal.stepper.go_idle(true);
+
         pulse_length = (uint16_t)(12.0f * (settings->steppers.pulse_microseconds - STEP_PULSE_LATENCY));
 
         if(hal.driver_cap.step_pulse_delay && settings->steppers.pulse_delay_microseconds > 0.0f) {
