@@ -829,7 +829,6 @@ inline static void spindle_off (spindle_ptrs_t *spindle)
 
 inline static void spindle_on (spindle_ptrs_t *spindle)
 {
-    spindle->context.pwm->flags.enable_out = On;
 #ifdef SPINDLE_DIRECTION_PIN
     if(spindle->context.pwm->flags.cloned) {
         BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = !settings.pwm_spindle.invert.ccw;
@@ -840,9 +839,10 @@ inline static void spindle_on (spindle_ptrs_t *spindle)
     BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = !settings.pwm_spindle.invert.on;
 #endif
 #if SPINDLE_ENCODER_ENABLE
-    if(spindle && spindle->reset_data)
+    if(!spindle->context.pwm->flags.enable_out && spindle->reset_data)
         spindle->reset_data();
 #endif
+    spindle->context.pwm->flags.enable_out = On;
 }
 
 inline static void spindle_dir (bool ccw)
@@ -1779,7 +1779,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "250404";
+    hal.driver_version = "250411";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
