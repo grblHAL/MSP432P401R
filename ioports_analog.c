@@ -206,9 +206,18 @@ static int32_t wait_on_input (io_port_type_t type, uint8_t port, wait_mode_t wai
 
 */
 
+static bool set_function (xbar_t *port, pin_function_t function)
+{
+    if(port->mode.output)
+        aux_out_analog[port->id].id = function;
+
+    return port->mode.output;
+}
+
 static xbar_t *get_pin_info (io_port_direction_t dir, uint8_t port)
 {
     static xbar_t pin;
+
     xbar_t *info = NULL;
 
     memset(&pin, 0, sizeof(xbar_t));
@@ -245,6 +254,7 @@ static xbar_t *get_pin_info (io_port_direction_t dir, uint8_t port)
                 pin.pin = aux_out_analog[pin.id].pin;
                 pin.port = (void *)aux_out_analog[pin.id].port;
                 pin.description = aux_out_analog[pin.id].description;
+                pin.set_function = set_function;
                 pin.get_value = pwm_get_value;
                 pin.config = init_pwm;
                 info = &pin;
