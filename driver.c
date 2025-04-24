@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2024 Terje Io
+  Copyright (c) 2017-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@
 #define AUX_CONTROLS (AUX_CONTROL_SPINDLE|AUX_CONTROL_COOLANT)
 #endif
 
+#include "grbl/task.h"
 #include "grbl/machine_limits.h"
 #include "grbl/spindle_sync.h"
 #include "grbl/state_machine.h"
@@ -251,7 +252,6 @@ static axes_signals_t next_step_out;
 #if SPINDLE_ENCODER_ENABLE
 
 static spindle_data_t spindle_data;
-static spindle_sync_t spindle_tracker;
 static spindle_encoder_t spindle_encoder = {
     .tics_per_irq = 4
 };
@@ -370,9 +370,6 @@ static void stepperWakeUp (void)
     hal.stepper.enable((axes_signals_t){AXES_BITMASK}, false);
     STEPPER_TIMER->LOAD = hal.f_step_timer / 500; // ~2ms delay to allow drivers time to wake up.
     STEPPER_TIMER->CONTROL |= TIMER32_CONTROL_ENABLE|TIMER32_CONTROL_IE;
-#if SPINDLE_ENCODER_ENABLE
-    spindle_tracker.segment_id = 0;
-#endif
 }
 
 // Disables stepper driver interrupts
@@ -397,15 +394,6 @@ static void stepperCyclesPerTick (uint32_t cycles_per_tick)
 // If spindle synchronized motion switch to PID version.
 static void stepperPulseStart (stepper_t *stepper)
 {
-#if SPINDLE_ENCODER_ENABLE
-    if(stepper->new_block && stepper->exec_segment->spindle_sync) {
-        spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
-        hal.stepper.pulse_start = stepperPulseStartSynchronized;
-        hal.stepper.pulse_start(stepper);
-        return;
-    }
-#endif
-
     if(stepper->dir_changed.bits) {
         stepper->dir_changed.bits = 0;
         set_dir_outputs(stepper->dir_out);
@@ -421,14 +409,6 @@ static void stepperPulseStart (stepper_t *stepper)
 // If spindle synchronized motion switch to PID version.
 static void stepperPulseStartDelayed (stepper_t *stepper)
 {
-#if SPINDLE_ENCODER_ENABLE
-    if(stepper->new_block && stepper->exec_segment->spindle_sync) {
-        spindle_tracker.stepper_pulse_start_normal = hal.stepper.pulse_start;
-        hal.stepper.pulse_start = stepperPulseStartSynchronized;
-        hal.stepper.pulse_start(stepper);
-        return;
-    }
-#endif
     if(stepper->dir_changed.bits) {
 
         set_dir_outputs(stepper->dir_out);
@@ -458,97 +438,6 @@ static void stepperPulseStartDelayed (stepper_t *stepper)
     }
 }
 
-#if SPINDLE_ENCODER_ENABLE
-
-// Spindle sync version: sets stepper direction and pulse pins and starts a step pulse.
-// Switches back to "normal" version if spindle synchronized motion is finished.
-// TODO: add delayed pulse handling...
-static void stepperPulseStartSynchronized (stepper_t *stepper)
-{
-    static bool sync = false;
-    static float block_start;
-
-    if(stepper->new_block) {
-        if(!stepper->exec_segment->spindle_sync) {
-            hal.stepper.pulse_start = spindle_tracker.stepper_pulse_start_normal;
-            hal.stepper.pulse_start(stepper);
-            return;
-        }
-        sync = true;
-        set_dir_outputs(stepper->dir_out);
-        spindle_tracker.programmed_rate = stepper->exec_block->programmed_rate;
-        spindle_tracker.steps_per_mm = stepper->exec_block->steps_per_mm;
-        spindle_tracker.segment_id = 0;
-        spindle_tracker.prev_pos = 0.0f;
-        block_start = hal.spindle_data.get(SpindleData_AngularPosition)->angular_position * spindle_tracker.programmed_rate;
-        pidf_reset(&spindle_tracker.pid);
-#ifdef PID_LOG
-        sys.pid_log.idx = 0;
-        sys.pid_log.setpoint = 100.0f;
-#endif
-    }
-
-    if(stepper->step_out.bits) {
-        set_step_outputs(stepper->step_out);
-        PULSE_TIMER->CTL |= TIMER_A_CTL_CLR|TIMER_A_CTL_MC1;
-    }
-
-    if(spindle_tracker.segment_id != stepper->exec_segment->id) {
-
-        spindle_tracker.segment_id = stepper->exec_segment->id;
-
-        if(!stepper->new_block) {  // adjust this segments total time for any positional error since last segment
-
-            float actual_pos;
-
-            if(stepper->exec_segment->cruising) {
-
-                float dt = (float)hal.f_step_timer / (float)(stepper->exec_segment->cycles_per_tick * stepper->exec_segment->n_step);
-                actual_pos = hal.spindle_data.get(SpindleData_AngularPosition)->angular_position * spindle_tracker.programmed_rate;
-
-                if(sync) {
-                    spindle_tracker.pid.sample_rate_prev = dt;
-//                    block_start += (actual_pos - spindle_tracker.block_start) - spindle_tracker.prev_pos;
-//                    block_start += spindle_tracker.prev_pos;
-                    sync = false;
-                }
-
-                actual_pos -= block_start;
-                int32_t step_delta = (int32_t)(pidf(&spindle_tracker.pid, spindle_tracker.prev_pos, actual_pos, dt) * spindle_tracker.steps_per_mm);
-
-
-                int32_t ticks = (((int32_t)stepper->step_count + step_delta) * (int32_t)stepper->exec_segment->cycles_per_tick) / (int32_t)stepper->step_count;
-
-                stepper->exec_segment->cycles_per_tick = (uint32_t)max(ticks, (int32_t)spindle_tracker.min_cycles_per_tick);
-
-                stepperCyclesPerTick(stepper->exec_segment->cycles_per_tick);
-           } else
-               actual_pos = spindle_tracker.prev_pos;
-
-#ifdef PID_LOG
-            if(sys.pid_log.idx < PID_LOG) {
-
-                sys.pid_log.target[sys.pid_log.idx] = spindle_tracker.prev_pos;
-                sys.pid_log.actual[sys.pid_log.idx] = actual_pos; // - spindle_tracker.prev_pos;
-
-                spindle_tracker.log[sys.pid_log.idx] = STEPPER_TIMER->BGLOAD << stepper->amass_level;
-            //    spindle_tracker.pos[sys.pid_log.idx] = stepper->exec_segment->cycles_per_tick  stepper->amass_level;
-                spindle_tracker.pos[sys.pid_log.idx] = stepper->exec_segment->cycles_per_tick * stepper->step_count;
-                STEPPER_TIMER->BGLOAD = STEPPER_TIMER->LOAD;
-
-             //   spindle_tracker.pos[sys.pid_log.idx] = spindle_tracker.prev_pos;
-
-                sys.pid_log.idx++;
-            }
-#endif
-        }
-
-        spindle_tracker.prev_pos = stepper->exec_segment->target_position;
-    }
-}
-
-#endif // SPINDLE_ENCODER_ENABLE
-
 // Enable/disable limit pins interrupt
 static void limitsEnable (bool on, axes_signals_t homing_cycle)
 {
@@ -573,7 +462,7 @@ static void limitsEnable (bool on, axes_signals_t homing_cycle)
 
 // Returns limit state as an axes_signals_t variable.
 // Each bitfield bit indicates an axis limit, where triggered is 1 and not triggered is 0.
-inline static limit_signals_t limitsGetState()
+inline static limit_signals_t limitsGetState (void)
 {
     limit_signals_t signals = {0};
 
@@ -738,7 +627,7 @@ static void aux_irq_handler (uint8_t port, bool state)
 #endif
 #ifdef MPG_MODE_PIN
             case Input_MPGSelect:
-                protocol_enqueue_foreground_task(mpg_select, NULL);
+                task_add_immediate(mpg_select, NULL);
                 break;
 #endif
             default:
@@ -1285,34 +1174,32 @@ void settings_changed (settings_t *settings, settings_changed_flags_t changed)
 
         static bool event_claimed = false;
 
-        if((hal.spindle_data.get = settings->spindle.ppr > 0 ? spindleGetData : NULL) &&
-             (spindle_encoder.ppr != settings->spindle.ppr || pidf_config_changed(&spindle_tracker.pid, &settings->position.pid))) {
+        if((hal.spindle_data.get = settings->spindle.ppr > 0 ? spindleGetData : NULL)) {
+            if(spindle_encoder.ppr != settings->spindle.ppr) {
 
-            spindle_ptrs_t *spindle;
+                spindle_ptrs_t *spindle;
 
-            hal.spindle_data.reset = spindleDataReset;
-            if((spindle = spindle_get(0)))
-                spindle->set_state(spindle, (spindle_state_t){0}, 0.0f);
+                hal.spindle_data.reset = spindleDataReset;
+                if((spindle = spindle_get(0)))
+                    spindle->set_state(spindle, (spindle_state_t){0}, 0.0f);
 
-            pidf_init(&spindle_tracker.pid, &settings->position.pid);
+                if(!event_claimed) {
+                    event_claimed = true;
+                    on_spindle_programmed = grbl.on_spindle_programmed;
+                    grbl.on_spindle_programmed = onSpindleProgrammed;
+                }
 
-            if(!event_claimed) {
-                event_claimed = true;
-                on_spindle_programmed = grbl.on_spindle_programmed;
-                grbl.on_spindle_programmed = onSpindleProgrammed;
+                float timer_resolution = 1.0f / (float)(SystemCoreClock / 16);
+
+                spindle_encoder.ppr = settings->spindle.ppr;
+                spindle_encoder.tics_per_irq = 4;
+                spindle_encoder.pulse_distance = 1.0f / spindle_encoder.ppr;
+                spindle_encoder.maximum_tt = (uint32_t)(0.25f / timer_resolution) * spindle_encoder.tics_per_irq; // 250 mS
+                spindle_encoder.rpm_factor = 60.0f / ((timer_resolution * (float)spindle_encoder.ppr));
+                BITBAND_PERI(SPINDLE_INDEX_PORT->IES, SPINDLE_INDEX_PIN) = 1;
+                BITBAND_PERI(SPINDLE_INDEX_PORT->IE, SPINDLE_INDEX_PIN) = 1;
+                spindleDataReset();
             }
-
-            float timer_resolution = 1.0f / (float)(SystemCoreClock / 16);
-
-            spindle_tracker.min_cycles_per_tick = hal.f_step_timer / 1000000UL * (uint32_t)ceilf(settings->steppers.pulse_microseconds * 2.0f + settings->steppers.pulse_delay_microseconds);
-            spindle_encoder.ppr = settings->spindle.ppr;
-            spindle_encoder.tics_per_irq = 4;
-            spindle_encoder.pulse_distance = 1.0f / spindle_encoder.ppr;
-            spindle_encoder.maximum_tt = (uint32_t)(0.25f / timer_resolution) * spindle_encoder.tics_per_irq; // 250 mS
-            spindle_encoder.rpm_factor = 60.0f / ((timer_resolution * (float)spindle_encoder.ppr));
-            BITBAND_PERI(SPINDLE_INDEX_PORT->IES, SPINDLE_INDEX_PIN) = 1;
-            BITBAND_PERI(SPINDLE_INDEX_PORT->IE, SPINDLE_INDEX_PIN) = 1;
-            spindleDataReset();
         } else {
             spindle_encoder.ppr = 0;
             hal.spindle_data.reset = NULL;
@@ -1682,7 +1569,6 @@ static bool driver_setup (settings_t *settings)
 #if SPINDLE_ENCODER_ENABLE
 
     memset(&spindle_encoder, 0, sizeof(spindle_encoder_t));
-    memset(&spindle_tracker, 0, sizeof(spindle_sync_t));
     memset(&spindle_data, 0, sizeof(spindle_data));
 
     SPINDLE_PULSE_PORT->SEL0 |= SPINDLE_PULSE_BIT; // Set as counter input
@@ -1780,7 +1666,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "250411";
+    hal.driver_version = "250423";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1910,9 +1796,6 @@ bool driver_init (void)
 #if SPINDLE_ENCODER_ENABLE
     hal.driver_cap.spindle_encoder = On;
 #endif
-#if SPINDLE_SYNC_ENABLE
-    hal.driver_cap.spindle_sync = On;
-#endif
     hal.coolant_cap.bits = COOLANT_ENABLE;
     hal.driver_cap.software_debounce = On;
     hal.driver_cap.step_pulse_delay = On;
@@ -1992,7 +1875,7 @@ bool driver_init (void)
     if(!hal.driver_cap.mpg_mode)
         hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, NULL);
     if(hal.driver_cap.mpg_mode)
-        protocol_enqueue_foreground_task(mpg_enable, NULL);
+        task_run_on_startup(mpg_enable, NULL);
 #elif MPG_ENABLE == 2
     if(!hal.driver_cap.mpg_mode)
         hal.driver_cap.mpg_mode = stream_mpg_register(stream_open_instance(MPG_STREAM, 115200, NULL, NULL), false, stream_mpg_check_enable);
@@ -2131,7 +2014,7 @@ static inline __attribute__((always_inline)) IRQHandler (input_signal_t **inputs
 #if MPG_ENABLE == 1
                 case PinGroup_MPG:
                     BITBAND_PERI(MPG_MODE_PORT->IE, MPG_MODE_PIN) = 0;
-                    protocol_enqueue_foreground_task(mpg_select, NULL);
+                    task_add_immediate(mpg_select, NULL);
                     break;
 #endif
 

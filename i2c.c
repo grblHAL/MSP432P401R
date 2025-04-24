@@ -315,7 +315,7 @@ i2c_cap_t i2c_start (void)
     P6->SEL0 |= (1<<I2C_SCL_PIN)|(1<<I2C_SDA_PIN);                                  // Assign I2C pins to USCI_B1
 
     if(!i2c_selftest()) {
-        protocol_enqueue_foreground_task(report_warning, "I2C bus error!");
+        task_run_on_startup(report_warning, "I2C bus error!");
         system_raise_alarm(Alarm_SelftestFailed);
         return cap;
     }
