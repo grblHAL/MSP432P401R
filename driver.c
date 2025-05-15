@@ -83,8 +83,6 @@ static spindle_control_t spindle_control = { .pid_state = PIDState_Disabled, .pi
 
 #if AUX_CONTROLS_ENABLED
 
-static uint8_t probe_port;
-
 static void aux_irq_handler (uint8_t port, bool state);
 
 #endif
@@ -244,7 +242,6 @@ static pin_group_pins_t limit_inputs = {0};
 static input_signal_t *p1_pins[9], *p2_pins[9], *p3_pins[9], *p4_pins[9], *p5_pins[9], *p6_pins[9];
 static volatile bool spindleLock = false;
 static bool IOInitDone = false;
-// Inverts the probe pin state depending on user settings and probing cycle mode.
 static uint16_t pulse_length;
 static volatile uint32_t elapsed_tics = 0;
 static axes_signals_t next_step_out;
@@ -264,9 +261,13 @@ static on_spindle_programmed_ptr on_spindle_programmed = NULL;
 #endif
 
 static delay_t delay = { .ms = 1, .callback = NULL }; // NOTE: initial ms set to 1 for "resetting" systick timer on startup
+
+#if PROBE_ENABLE || PROBE2_ENABLE || TOOLSETTER_ENABLE
+static probe_t probes[3];
 static probe_state_t probe = {
     .connected = On
 };
+#endif
 
 #include "grbl/stepdir_map.h"
 
@@ -535,7 +536,7 @@ static control_signals_t systemGetState (void)
     return signals;
 }
 
-#if PROBE_ENABLE
+#if PROBE_ENABLE || PROBE2_ENABLE || TOOLSETTER_ENABLE
 
 // Toggle probe connected status. Used when no input pin is available.
 static void probeConnectedToggle (void)
@@ -548,13 +549,35 @@ static void probeConnectedToggle (void)
 // and the probing cycle modes for toward-workpiece/away-from-workpiece.
 static void probeConfigure (bool is_probe_away, bool probing)
 {
-    probe.inverted = is_probe_away ? !settings.probe.invert_probe_pin : settings.probe.invert_probe_pin;
+    uint8_t port;
+    bool invert, latch;
 
-    if(hal.driver_cap.probe_latch) {
+    port = probes[probe.probe_id].port;
+    latch = probes[probe.probe_id].latchable;
+
+    switch((probe_id_t)probe.probe_id) {
+#if TOOLSETTER_ENABLE
+        case Probe_Toolsetter:
+            invert = settings.probe.invert_toolsetter_input;
+            break;
+#endif
+#if PROBE2_ENABLE
+        case Probe_2:
+            invert = settings.probe.invert_probe2_input;
+            break;
+#endif
+        default: // Probe_Default
+            invert = settings.probe.invert_probe_pin;
+            break;
+    }
+
+    probe.inverted = is_probe_away ? !invert : invert;
+
+    if(latch) {
         probe.is_probing = Off;
         probe.triggered = hal.probe.get_state().triggered;
         pin_irq_mode_t irq_mode = probing && !probe.triggered ? (probe.inverted ? IRQ_Mode_Falling : IRQ_Mode_Rising) : IRQ_Mode_None;
-        probe.irq_enabled = hal.port.register_interrupt_handler(probe_port, irq_mode, aux_irq_handler) && irq_mode != IRQ_Mode_None;
+        probe.irq_enabled = hal.port.register_interrupt_handler(port, irq_mode, aux_irq_handler) && irq_mode != IRQ_Mode_None;
     }
 
     if(!probe.irq_enabled)
@@ -566,15 +589,78 @@ static void probeConfigure (bool is_probe_away, bool probing)
 // Returns the probe pin state. Triggered = true.
 static probe_state_t probeGetState (void)
 {
-    probe_state_t state = {0};
+    probe_state_t state = {};
 
+    state.probe_id = probe.probe_id;
     state.connected = probe.connected;
-    state.triggered = probe.is_probing && probe.irq_enabled ? probe.triggered : BITBAND_PERI(PROBE_PORT->IN, PROBE_PIN) ^ probe.inverted;
+
+    if(probe.is_probing && probe.irq_enabled)
+        state.triggered = probe.triggered;
+
+    else switch((probe_id_t)probe.probe_id) {
+#if TOOLSETTER_ENABLE
+        case Probe_Toolsetter:
+            state.triggered = BITBAND_PERI(TOOLSETTER_PORT->IN, TOOLSETTER_PIN) ^ probe.inverted;
+            break;
+#endif
+#if PROBE2_ENABLE
+        case Probe_2:
+            state.triggered = BITBAND_PERI(PROBE2_PORT->IN, PROBE2_PIN) ^ probe.inverted;
+            break;
+#endif
+        default: // Probe_Default
+            state.triggered = BITBAND_PERI(PROBE_PORT->IN, PROBE_PIN) ^ probe.inverted;
+            break;
+    }
 
     return state;
 }
 
-#endif // PROBE_ENABLE
+#if PROBE2_ENABLE || TOOLSETTER_ENABLE
+
+static bool probeSelect (probe_id_t probe_id)
+{
+    bool ok;
+
+    if((ok = !probe.is_probing && (probe_id == Probe_Default
+#if TOOLSETTER_ENABLE
+    || probe_id == Probe_Toolsetter
+#endif
+#if PROBE2_ENABLE
+    || probe_id == Probe_2
+#endif
+    ))) probe.probe_id = probe_id;
+
+    hal.probe.configure(false, false);
+
+    return ok;
+}
+
+#endif // PROBE2_ENABLE || TOOLSETTER_ENABLE
+
+static void probe_add (probe_id_t probe_id, uint8_t port, bool can_latch, bool can_select)
+{
+    static bool latchable = true;
+
+    if(!can_latch)
+        latchable = false;
+
+    probes[probe_id].port = port;
+    probes[probe_id].latchable = can_latch;
+
+    hal.driver_cap.probe_pull_up = On;
+    hal.probe.get_state = probeGetState;
+    hal.probe.configure = probeConfigure;
+    hal.probe.connected_toggle = probeConnectedToggle;
+    hal.signals_cap.probe_triggered = latchable;
+#if PROBE2_ENABLE || TOOLSETTER_ENABLE
+    if(can_select)
+        hal.probe.select = probeSelect;
+#endif
+}
+
+#endif // PROBE_ENABLE || PROBE2_ENABLE || TOOLSETTER_ENABLE
+
 
 #if MPG_ENABLE == 1
 
@@ -610,8 +696,16 @@ static void aux_irq_handler (uint8_t port, bool state)
 
     if((pin = aux_ctrl_get_pin(port))) {
         switch(pin->function) {
-#ifdef PROBE_PIN
+#if defined(PROBE_PIN) || defined(PROBE2_PIN) || defined(TOOLSETTER_PIN)
+  #ifdef PROBE_PIN
             case Input_Probe:
+  #endif
+  #ifdef PROBE_PIN
+          case Input_Probe2:
+  #endif
+  #ifdef TOOLSETTER_PIN
+            case Input_Toolsetter:
+  #endif
                 if(probe.is_probing) {
                     probe.triggered = On;
                     return;
@@ -650,21 +744,36 @@ static bool aux_claim_explicit (aux_ctrl_t *aux_ctrl)
     xbar_t *pin;
 
     if((pin = ioport_claim(Port_Digital, Port_Input, &aux_ctrl->aux_port, NULL))) {
+
         ioport_set_function(pin, aux_ctrl->function, &aux_ctrl->cap);
+
+        switch(aux_ctrl->function) {
 #ifdef PROBE_PIN
-        if(aux_ctrl->function == Input_Probe) {
-            probe_port = aux_ctrl->aux_port;
-            hal.probe.get_state = probeGetState;
-            hal.probe.configure = probeConfigure;
-            hal.probe.connected_toggle = probeConnectedToggle;
-            hal.driver_cap.probe_pull_up = On;
-            hal.signals_cap.probe_triggered = hal.driver_cap.probe_latch = (pin->cap.irq_mode & aux_ctrl->irq_mode) == aux_ctrl->irq_mode;
-        }
+            case Input_Probe:
+    //            hal.driver_cap.probe = On;
+                probe_add(Probe_Default, aux_ctrl->aux_port, (pin->cap.irq_mode & aux_ctrl->irq_mode) == aux_ctrl->irq_mode, false);
+                break;
+#endif
+#ifdef PROBE2_PIN
+            case Input_Probe2:
+                hal.driver_cap.probe2 = On;
+                probe_add(Probe_2, aux_ctrl->aux_port, (pin->cap.irq_mode & aux_ctrl->irq_mode) == aux_ctrl->irq_mode, true);
+                break;
+
+#endif
+#ifdef TOOLSETTER_PIN
+            case Input_Toolsetter:
+                hal.driver_cap.toolsetter = On;
+                probe_add(Probe_Toolsetter, aux_ctrl->aux_port, (pin->cap.irq_mode & aux_ctrl->irq_mode) == aux_ctrl->irq_mode, true);
+                break;
 #endif
 #if SAFETY_DOOR_ENABLE
-        if(aux_ctrl->function == Input_SafetyDoor)
-            ((input_signal_t *)aux_ctrl->input)->mode.debounce = ((input_signal_t *)aux_ctrl->input)->cap.debounce = On;
+            case Input_SafetyDoor:
+                ((input_signal_t *)aux_ctrl->input)->mode.debounce = ((input_signal_t *)aux_ctrl->input)->cap.debounce = On;
+                break;
 #endif
+            default: break;
+        }
     } else
         aux_ctrl->aux_port = 0xFF;
 
@@ -704,14 +813,20 @@ inline static float spindle_calc_rpm (uint32_t tpp)
 
 inline static void spindle_off (spindle_ptrs_t *spindle)
 {
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
     spindle->context.pwm->flags.enable_out = Off;
-#ifdef SPINDLE_DIRECTION_PIN
+  #ifdef SPINDLE_DIRECTION_PIN
     if(spindle->context.pwm->flags.cloned) {
         BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = settings.pwm_spindle.invert.ccw;
     } else {
         BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = settings.pwm_spindle.invert.on;
+        BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = settings.pwm_spindle.invert.ccw;
     }
-#elif defined(SPINDLE_ENABLE_PIN)
+  #elif defined(SPINDLE_ENABLE_PIN)
+    BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = settings.pwm_spindle.invert.on;
+    BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = settings.pwm_spindle.invert.ccw;
+  #endif
+#else
     BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = settings.pwm_spindle.invert.on;
     BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = settings.pwm_spindle.invert.ccw;
 #endif
@@ -719,20 +834,24 @@ inline static void spindle_off (spindle_ptrs_t *spindle)
 
 inline static void spindle_on (spindle_ptrs_t *spindle)
 {
-#ifdef SPINDLE_DIRECTION_PIN
+#if DRIVER_SPINDLE_ENABLE & SPINDLE_PWM
+  #ifdef SPINDLE_DIRECTION_PIN
     if(spindle->context.pwm->flags.cloned) {
         BITBAND_PERI(SPINDLE_DIRECTION_PORT->OUT, SPINDLE_DIRECTION_PIN) = !settings.pwm_spindle.invert.ccw;
     } else {
         BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = !settings.pwm_spindle.invert.on;
     }
-#elif defined(SPINDLE_ENABLE_PIN)
+  #elif defined(SPINDLE_ENABLE_PIN)
     BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = !settings.pwm_spindle.invert.on;
-#endif
-#if SPINDLE_ENCODER_ENABLE
+  #endif
+  #if SPINDLE_ENCODER_ENABLE
     if(!spindle->context.pwm->flags.enable_out && spindle->reset_data)
         spindle->reset_data();
-#endif
+  #endif
     spindle->context.pwm->flags.enable_out = On;
+#else
+    BITBAND_PERI(SPINDLE_ENABLE_PORT->OUT, SPINDLE_ENABLE_PIN) = !settings.pwm_spindle.invert.on;
+#endif
 }
 
 inline static void spindle_dir (bool ccw)
@@ -1666,7 +1785,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "250423";
+    hal.driver_version = "250514";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;

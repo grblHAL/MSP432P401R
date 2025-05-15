@@ -75,14 +75,6 @@
 #define XY_ENABLE_PORT          port(B)
 #define XY_ENABLE_PIN           13
 
-// Trinamic drivers in I2C mode uses XY_ENABLE_PIN as interrupt input for DIAG1 signal
-#if TRINAMIC_ENABLE == 2130 && TRINAMIC_I2C
-#define TRINAMIC_DIAG_IRQ_PORT   port(B)
-#define TRINAMIC_DIAG_IRQ_PIN    13
-#define TRINAMIC_WARN_IRQ_PORT   port(C)
-#define TRINAMIC_WARN_IRQ_PIN    7
-#endif
-
 #if CNC_BOOSTERPACK_A4998
 
 // Stepper driver VDD/VIO supply
@@ -243,14 +235,17 @@
 #define PROBE_PIN               AUXINPUT6_PIN
 #endif
 
-#if SAFETY_DOOR_ENABLE
-#define SAFETY_DOOR_PORT        AUXINPUT2_PORT
-#define SAFETY_DOOR_PIN         AUXINPUT2_PIN
+#if PROBE2_ENABLE
+#define PROBE2_PORT             AUXINPUT3_PORT
+#define PROBE2_PIN              AUXINPUT3_PIN
 #endif
 
-#if MOTOR_FAULT_ENABLE
-#define MOTOR_FAULT_PORT        AUXINPUT1_PORT
-#define MOTOR_FAULT_PIN         AUXINPUT1_PIN
+#if TOOLSETTER_ENABLE
+#define TOOLSETTER_PORT         AUXINPUT2_PORT
+#define TOOLSETTER_PIN          AUXINPUT2_PIN
+#elif SAFETY_DOOR_ENABLE
+#define SAFETY_DOOR_PORT        AUXINPUT2_PORT
+#define SAFETY_DOOR_PIN         AUXINPUT2_PIN
 #endif
 
 #if MPG_ENABLE == 1
@@ -261,6 +256,22 @@
 #if I2C_STROBE_ENABLE
 #define I2C_STROBE_PORT         AUXINPUT5_PORT
 #define I2C_STROBE_PIN          AUXINPUT5_PIN
+#endif
+
+// Trinamic drivers in I2C mode uses XY_ENABLE_PIN as interrupt input for DIAG1 signal
+#if TRINAMIC_ENABLE == 2130 && TRINAMIC_I2C
+#if MOTOR_FAULT_ENABLE
+#define AUXINPUT7_PORT          port(B)
+#define AUXINPUT7_PIN           13
+#define MOTOR_FAULT_PORT        AUXINPUT7_PORT
+#define MOTOR_FAULT_PIN         AUXINPUT7_PIN
+#endif
+#if MOTOR_WARNING_ENABLE
+#define AUXINPUT8_PORT          port(C)
+#define AUXINPUT8_PIN           7
+#define MOTOR_WARNING_PORT      AUXINPUT1_PORT
+#define MOTOR_WARNING_PIN       AUXINPUT1_PIN
+#endif
 #endif
 
 #define I2C_PN                  B1

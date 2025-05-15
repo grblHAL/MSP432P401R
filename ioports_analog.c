@@ -386,8 +386,6 @@ void ioports_init_analog (pin_group_pins_t *aux_inputs, pin_group_pins_t *aux_ou
                 .invert = Off
             };
 
-            hal.port.analog_out = analog_out;
-
         //   P3MAP->PMAP_REGISTER5 = 25;
 
             AUX0_PWM_TIMER->CTL = TIMER_A_CTL_SSEL__SMCLK;
