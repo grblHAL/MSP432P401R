@@ -160,30 +160,6 @@
 #define COOLANT_MIST_PIN        AUXOUTPUT6_PIN
 #endif
 
-// Define user-control controls (cycle start, reset, feed hold) input pins.
-
-#if CNC_BOOSTERPACK_SHORTS
-
-#define RESET_PORT              port(C)
-#define RESET_PIN               15
-#define CYCLE_START_PORT        port(C)
-#define CYCLE_START_PIN         8
-#define FEED_HOLD_PORT          port(C)
-#define FEED_HOLD_PIN           14
-
-#else
-
-#define RESET_PORT              port(A)
-#define RESET_PIN               12
-#define CYCLE_START_PORT        port(C)
-#define CYCLE_START_PIN         15
-#define FEED_HOLD_PORT          port(C)
-#define FEED_HOLD_PIN           14
-
-#define CONTROL_INMODE          GPIO_BITBAND
-
-#endif
-
 // Normally used as MPG mode input
 #define GPIO2_PN                5
 #define GPIO2_PORT              port(C)
@@ -229,6 +205,35 @@
 #define AUXINPUT5_PIN           9
 #define AUXINPUT6_PORT          port(B) // Probe
 #define AUXINPUT6_PIN           14
+#if CNC_BOOSTERPACK_SHORTS
+#define AUXINPUT7_PORT          port(C)
+#define AUXINPUT7_PIN           15
+#define AUXINPUT8_PORT          port(C)
+#define AUXINPUT8_PIN           8
+#define AUXINPUT9_PORT          port(C)
+#define AUXINPUT9_PIN           14
+#else
+#define AUXINPUT7_PORT          port(A)
+#define AUXINPUT7_PIN           12
+#define AUXINPUT8_PORT          port(C)
+#define AUXINPUT8_PIN           15
+#define AUXINPUT9_PORT          port(C)
+#define AUXINPUT9_PIN           14
+#endif
+
+// Define user-control controls (cycle start, reset, feed hold) input pins.
+#if CONTROL_ENABLE & CONTROL_HALT
+#define RESET_PORT              AUXINPUT7_PORT
+#define RESET_PIN               AUXINPUT7_PIN
+#endif
+#if CONTROL_ENABLE & CONTROL_FEED_HOLD
+#define FEED_HOLD_PORT          AUXINPUT8_PORT
+#define FEED_HOLD_PIN           AUXINPUT8_PIN
+#endif
+#if CONTROL_ENABLE & CONTROL_CYCLE_START
+#define CYCLE_START_PORT        AUXINPUT9_PORT
+#define CYCLE_START_PIN         AUXINPUT9_PIN
+#endif
 
 #if PROBE_ENABLE
 #define PROBE_PORT              AUXINPUT6_PORT
@@ -261,16 +266,16 @@
 // Trinamic drivers in I2C mode uses XY_ENABLE_PIN as interrupt input for DIAG1 signal
 #if TRINAMIC_ENABLE == 2130 && TRINAMIC_I2C
 #if MOTOR_FAULT_ENABLE
-#define AUXINPUT7_PORT          port(B)
-#define AUXINPUT7_PIN           13
-#define MOTOR_FAULT_PORT        AUXINPUT7_PORT
-#define MOTOR_FAULT_PIN         AUXINPUT7_PIN
+#define AUXINPUT10_PORT         port(B)
+#define AUXINPUT10_PIN          13
+#define MOTOR_FAULT_PORT        AUXINPUT10_PORT
+#define MOTOR_FAULT_PIN         AUXINPUT10_PIN
 #endif
 #if MOTOR_WARNING_ENABLE
-#define AUXINPUT8_PORT          port(C)
-#define AUXINPUT8_PIN           7
-#define MOTOR_WARNING_PORT      AUXINPUT1_PORT
-#define MOTOR_WARNING_PIN       AUXINPUT1_PIN
+#define AUXINPUT11_PORT         port(C)
+#define AUXINPUT11_PIN          7
+#define MOTOR_WARNING_PORT      AUXINPUT11_PORT
+#define MOTOR_WARNING_PIN       AUXINPUT11_PIN
 #endif
 #endif
 

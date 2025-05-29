@@ -42,71 +42,11 @@
 #include "my_machine.h"
 #endif
 
+#define OPTS_POSTPROCESSING
+
 #include "grbl/driver_opts.h"
 
 #define NO_MSP_CLASSIC_DEFINES
-
-// Configuration
-
-#ifndef CNC_BOOSTERPACK_SHORTS
-#define CNC_BOOSTERPACK_SHORTS  0
-#endif
-#ifndef CNC_BOOSTERPACK_A4998
-#define CNC_BOOSTERPACK_A4998   0
-#endif
-
-#define CNC_BOOSTERPACK         0
-
-// Define GPIO I/O mode options
-
-#define GPIO_SHIFT0   0
-#define GPIO_SHIFT1   1
-#define GPIO_SHIFT2   2
-#define GPIO_SHIFT3   3
-#define GPIO_SHIFT4   4
-#define GPIO_SHIFT5   5
-#define GPIO_MAP      8
-#define GPIO_BITBAND  9
-#define GPIO_MASKED  10
-
-#ifdef BOARD_CNC_BOOSTERPACK
-#include "cnc_boosterpack_map.h"
-#elif defined(BOARD_MY_MACHINE)
-#include "my_machine_map.h"
-#else
-#error "No board!"
-#endif
-
-// Adjust STEP_PULSE_LATENCY to get accurate step pulse length when required, e.g if using high step rates.
-// The default value is calibrated for 10 microseconds length.
-// NOTE: step output mode, number of axes and compiler optimization settings may all affect this value.
-#ifndef STEP_PULSE_LATENCY
-#define STEP_PULSE_LATENCY 1.8f // microseconds
-#endif
-
-// End configuration
-
-#if TRINAMIC_ENABLE && CNC_BOOSTERPACK_A4998 == 0
-#undef CNC_BOOSTERPACK_A4998
-#define CNC_BOOSTERPACK_A4998 1
-#endif
-
-#if TRINAMIC_ENABLE
-#ifndef TRINAMIC_MIXED_DRIVERS
-#define TRINAMIC_MIXED_DRIVERS 1
-#endif
-#include "motors/trinamic.h"
-#include "trinamic/common.h"
-#endif
-
-#if PLASMA_ENABLE
-#include "plasma/thc.h"
-#endif
-
-#if ATC_ENABLE
-#undef I2C_ENABLE
-#define I2C_ENABLE 1
-#endif
 
 #define port(p) portI(p)
 #define portI(p) P ## p
@@ -141,6 +81,70 @@
 #define timer32I(p) T32_INT ## p ## _IRQn
 #define timer32HANDLER(p) timer32H(p)
 #define timer32H(p) T32_INT ## p ## _IRQHandler
+
+// Configuration
+
+#ifndef CNC_BOOSTERPACK_SHORTS
+#define CNC_BOOSTERPACK_SHORTS  0
+#endif
+#ifndef CNC_BOOSTERPACK_A4998
+#define CNC_BOOSTERPACK_A4998   0
+#endif
+
+#define CNC_BOOSTERPACK         0
+
+// Define GPIO I/O mode options
+
+#define GPIO_SHIFT0   0
+#define GPIO_SHIFT1   1
+#define GPIO_SHIFT2   2
+#define GPIO_SHIFT3   3
+#define GPIO_SHIFT4   4
+#define GPIO_SHIFT5   5
+#define GPIO_MAP      8
+#define GPIO_BITBAND  9
+#define GPIO_MASKED  10
+
+#ifndef CONTROL_ENABLE
+#define CONTROL_ENABLE (CONTROL_HALT|CONTROL_FEED_HOLD|CONTROL_CYCLE_START)
+#endif
+
+#ifdef BOARD_CNC_BOOSTERPACK
+#include "cnc_boosterpack_map.h"
+#elif defined(BOARD_MY_MACHINE)
+#include "my_machine_map.h"
+#else
+#error "No board!"
+#endif
+
+// Adjust STEP_PULSE_LATENCY to get accurate step pulse length when required, e.g if using high step rates.
+// The default value is calibrated for 10 microseconds length.
+// NOTE: step output mode, number of axes and compiler optimization settings may all affect this value.
+#ifndef STEP_PULSE_LATENCY
+#define STEP_PULSE_LATENCY 1.8f // microseconds
+#endif
+
+// End configuration
+
+#include "grbl/driver_opts2.h"
+
+#if TRINAMIC_ENABLE && CNC_BOOSTERPACK_A4998 == 0
+#undef CNC_BOOSTERPACK_A4998
+#define CNC_BOOSTERPACK_A4998 1
+#endif
+
+#if TRINAMIC_ENABLE
+#include "trinamic/common.h"
+#endif
+
+#if PLASMA_ENABLE
+#include "plasma/thc.h"
+#endif
+
+#if ATC_ENABLE
+#undef I2C_ENABLE
+#define I2C_ENABLE 1
+#endif
 
 // Define timer registers
 
