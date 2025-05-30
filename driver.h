@@ -124,7 +124,12 @@
 #define STEP_PULSE_LATENCY 1.8f // microseconds
 #endif
 
+#if KEYPAD_ENABLE == 2 || MPG_ENABLE || (MODBUS_ENABLE & MODBUS_RTU_ENABLED)
+#define SERIAL1_PORT
+#endif
+
 // End configuration
+
 
 #include "grbl/driver_opts2.h"
 

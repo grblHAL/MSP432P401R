@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2024 Terje Io
+  Copyright (c) 2017-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -21,21 +21,54 @@
 
 */
 
-#ifndef __serial_h__
-#define __serial_h__
+#ifndef __SERIAL0_h__
+#define __SERIAL0_h__
 
 #include "serial.h"
 
+#include "grbl/protocol.h"
+
 #define TXBUSY(uart) ((uart->IE & EUSCI_A_IE_TXIE) || (uart->STATW & EUSCI_A_STATW_BUSY))
 
-static stream_tx_buffer_t txbuffer = {0};
-static stream_rx_buffer_t rxbuffer = {0};
+#define eusci(p) eusciM(p)
+#define eusciM(p) EUSCI_ ## p
+#define eusciINT(p) eusciI(p)
+#define eusciI(p) EUSCI ## p ## _IRQn
+#define eusciHANDLER(p) eusciH(p)
+#define eusciH(p) EUSCI ## p ## _IRQHandler
+
+// Define serial port pins and modules
+
+#define SERIAL0_MOD         A0
+#define SERIAL0_MODULE      eusci(SERIAL0_MOD)
+#define SERIAL0_MODULE_INT  eusciINT(SERIAL0_MOD)
+#define SERIAL0_IRQHandler  eusciHANDLER(SERIAL0_MOD)
+#define SERIAL0_PORT        P1
+#define SERIAL0_RX_PIN      2
+#define SERIAL0_TX_PIN      3
+
+static stream_tx_buffer_t txbuffer = {};
+static stream_rx_buffer_t rxbuffer = {};
 static enqueue_realtime_command_ptr enqueue_realtime_command = protocol_enqueue_realtime_command;
 
-#ifdef SERIAL2_MOD
-static stream_tx_buffer_t txbuffer2 = {0};
-static stream_rx_buffer_t rxbuffer2 = {0};
+static const io_stream_t *serialInit (uint32_t baud_rate);
+
+#ifdef SERIAL1_PORT
+
+#define SERIAL2_MOD         A2
+#define SERIAL2_MODULE      eusci(SERIAL2_MOD)
+#define SERIAL2_MODULE_INT  eusciINT(SERIAL2_MOD)
+#define SERIAL2_IRQHandler  eusciHANDLER(SERIAL2_MOD)
+#define SERIAL2_PORT        P3
+#define SERIAL2_RX_PIN      2
+#define SERIAL2_TX_PIN      3
+
+static stream_tx_buffer_t txbuffer2 = {};
+static stream_rx_buffer_t rxbuffer2 = {};
 static enqueue_realtime_command_ptr enqueue_realtime_command2 = protocol_enqueue_realtime_command;
+
+static const io_stream_t *serial2Init (uint32_t baud_rate);
+
 #endif
 
 #ifdef RTS_PORT
@@ -141,8 +174,8 @@ static inline bool serialPutCNonBlocking (const char c)
 {
     bool ok;
 
-    if((ok = !TXBUSY(SERIAL_MODULE)))
-        SERIAL_MODULE->TXBUF = c;
+    if((ok = !TXBUSY(SERIAL0_MODULE)))
+        SERIAL0_MODULE->TXBUF = c;
 
     return ok;
 }
@@ -159,7 +192,7 @@ static bool serialPutC (const char c) {
         next_head = (txbuffer.head + 1) & (TX_BUFFER_SIZE - 1);         // .. if not, set and update head pointer
 
         while(txbuffer.tail == next_head) {                             // While TX buffer full
-            SERIAL_MODULE->IE |= EUSCI_A_IE_TXIE;                       // Enable TX interrupts???
+            SERIAL0_MODULE->IE |= EUSCI_A_IE_TXIE;                       // Enable TX interrupts???
             if(!hal.stream_blocking_callback())                         // check if blocking for space,
                 return false;                                           // exit if not (leaves TX buffer in an inconsistent state)
         }
@@ -167,7 +200,7 @@ static bool serialPutC (const char c) {
         txbuffer.data[txbuffer.head] = c;                               // Add data to buffer
         txbuffer.head = next_head;                                      // and update head pointer
 
-        SERIAL_MODULE->IE |= EUSCI_A_IE_TXIE;                           // Enable TX interrupts
+        SERIAL0_MODULE->IE |= EUSCI_A_IE_TXIE;                           // Enable TX interrupts
     }
 
     return true;
@@ -239,7 +272,7 @@ static bool serialSuspendInput (bool suspend)
 
 static bool serialDisable (bool disable)
 {
-    SERIAL_MODULE->IE = disable ? 0 : EUSCI_A_IE_RXIE;
+    SERIAL0_MODULE->IE = disable ? 0 : EUSCI_A_IE_RXIE;
 
     return true;
 }
@@ -259,7 +292,7 @@ static enqueue_realtime_command_ptr serialSetRtHandler (enqueue_realtime_command
     return prev;
 }
 
-const io_stream_t *serialInit (uint32_t baud_rate)
+static const io_stream_t *serialInit (uint32_t baud_rate)
 {
     static const io_stream_t stream = {
         .type = StreamType_Serial,
@@ -281,17 +314,17 @@ const io_stream_t *serialInit (uint32_t baud_rate)
 
     serial[0].flags.claimed = On;
 
-    SERIAL_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
-    SERIAL_MODULE->BRW = 6;
-    SERIAL_MODULE->MCTLW = (0x20 << 8) | (8 << 4) | 1;
-    SERIAL_MODULE->IFG = ~EUSCI_A_IFG_RXIFG;
-    SERIAL_MODULE->CTLW0 &= ~EUSCI_A_CTLW0_SWRST;
-    SERIAL_MODULE->IE = EUSCI_A_IE_RXIE;
+    SERIAL0_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
+    SERIAL0_MODULE->BRW = 6;
+    SERIAL0_MODULE->MCTLW = (0x20 << 8) | (8 << 4) | 1;
+    SERIAL0_MODULE->IFG = ~EUSCI_A_IFG_RXIFG;
+    SERIAL0_MODULE->CTLW0 &= ~EUSCI_A_CTLW0_SWRST;
+    SERIAL0_MODULE->IE = EUSCI_A_IE_RXIE;
 
-    NVIC_SetPriority(SERIAL_MODULE_INT, 3);
-    NVIC_EnableIRQ(SERIAL_MODULE_INT);
+    NVIC_SetPriority(SERIAL0_MODULE_INT, 3);
+    NVIC_EnableIRQ(SERIAL0_MODULE_INT);
 
-    SERIAL_PORT->SEL0 = (1<<SERIAL_RX_PIN)|(1<<SERIAL_TX_PIN);    // set 2-UART pins as second function
+    SERIAL0_PORT->SEL0 = (1<<SERIAL0_RX_PIN)|(1<<SERIAL0_TX_PIN);    // set 2-UART pins as second function
 
     __enable_interrupts();
 
@@ -303,8 +336,8 @@ const io_stream_t *serialInit (uint32_t baud_rate)
     static const periph_pin_t tx = {
         .function = Output_TX,
         .group = PinGroup_UART,
-        .port = SERIAL_PORT,
-        .pin = SERIAL_TX_PIN,
+        .port = SERIAL0_PORT,
+        .pin = SERIAL0_TX_PIN,
         .mode = { .mask = PINMODE_OUTPUT },
         .description = "Primary UART"
     };
@@ -312,8 +345,8 @@ const io_stream_t *serialInit (uint32_t baud_rate)
     static const periph_pin_t rx = {
         .function = Input_RX,
         .group = PinGroup_UART,
-        .port = SERIAL_PORT,
-        .pin = SERIAL_RX_PIN,
+        .port = SERIAL0_PORT,
+        .pin = SERIAL0_RX_PIN,
         .mode = { .mask = PINMODE_NONE },
         .description = "Primary UART"
     };
@@ -325,23 +358,23 @@ const io_stream_t *serialInit (uint32_t baud_rate)
 }
 
 //
-void SERIAL_IRQHandler (void)
+void SERIAL0_IRQHandler (void)
 {
     uint32_t bptr;
 
-    switch(SERIAL_MODULE->IV) {
+    switch(SERIAL0_MODULE->IV) {
 
         case 0x04:
             bptr = txbuffer.tail;                           // Temp tail position (to avoid volatile overhead)
-            SERIAL_MODULE->TXBUF = txbuffer.data[bptr++];   // Send a byte from the buffer
+            SERIAL0_MODULE->TXBUF = txbuffer.data[bptr++];   // Send a byte from the buffer
             bptr &= (TX_BUFFER_SIZE - 1);                   // and update
             txbuffer.tail = bptr;                           // tail position
             if (bptr == txbuffer.head)                      // Turn off TX interrupt
-                SERIAL_MODULE->IE &= ~EUSCI_A_IE_TXIE;      // when buffer empty
+                SERIAL0_MODULE->IE &= ~EUSCI_A_IE_TXIE;      // when buffer empty
             break;
 
         case 0x02:;
-            uint16_t data = SERIAL_MODULE->RXBUF;                   // Read character received
+            uint16_t data = SERIAL0_MODULE->RXBUF;                   // Read character received
             if(!enqueue_realtime_command((char)data)) {             // Enqueued as real-time command?
                 bptr = (rxbuffer.head + 1) & (RX_BUFFER_SIZE - 1);  // Get next head pointer
                 if(bptr == rxbuffer.tail)                           // If buffer full
@@ -424,7 +457,7 @@ static bool serial2PutC (const char c) {
         next_head = (txbuffer2.head + 1) & (TX_BUFFER_SIZE - 1);            // .. if not, set and update head pointer
 
         while(txbuffer2.tail == next_head) {                                // While TX buffer full
-            SERIAL_MODULE->IE |= EUSCI_A_IE_TXIE;                           // Enable TX interrupts???
+            SERIAL0_MODULE->IE |= EUSCI_A_IE_TXIE;                           // Enable TX interrupts???
         }
 
         txbuffer2.data[txbuffer2.head] = c;                                 // Add data to buffer
@@ -540,7 +573,7 @@ static enqueue_realtime_command_ptr serial2SetRtHandler (enqueue_realtime_comman
     return prev;
 }
 
-const io_stream_t *serial2Init (uint32_t baud_rate)
+static const io_stream_t *serial2Init (uint32_t baud_rate)
 {
     static const io_stream_t stream = {
         .type = StreamType_Serial,
@@ -651,4 +684,4 @@ void SERIAL2_IRQHandler (void)
 }
 #endif
 
-#endif // __serial_h__
+#endif // __SERIAL_h__

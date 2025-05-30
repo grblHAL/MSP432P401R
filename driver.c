@@ -1756,7 +1756,9 @@ bool driver_init (void)
     hal.periph_port.register_pin = registerPeriphPin;
     hal.periph_port.set_pin_description = setPeriphPinDescription;
 
-    stream_connect(serialInit(115200));
+    serialRegisterStreams();
+    if(!stream_connect_instance(SERIAL_STREAM, BAUD_RATE))
+        while(true); // Cannot boot if no communication channel is available!
 
 #if EEPROM_ENABLE
     i2c_eeprom_init();
@@ -1824,8 +1826,6 @@ bool driver_init (void)
    spindle_id = spindle_register(&spindle, DRIVER_SPINDLE_NAME);
 
 #endif // DRIVER_SPINDLE_ENABLE
-
-    serialRegisterStreams();
 
   // driver capabilities, used for announcing and negotiating (with the core) driver functionality
 
