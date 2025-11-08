@@ -1085,8 +1085,6 @@ uint32_t getElapsedTicks (void)
 // Configure perhipherals when settings are initialized or changed
 void settings_changed (settings_t *settings, settings_changed_flags_t changed)
 {
-    spindle_ptrs_t *spindle = spindle_get(spindle_id);
-
 #if USE_STEPDIR_MAP
     stepdirmap_init(settings);
 #endif
@@ -1393,7 +1391,7 @@ static void enumeratePins (bool low_level, pin_info_ptr pin_info, void *data)
         pin.group = ppin->pin.group;
         pin.port = low_level ? ppin->pin.port : (void *)port2char(ppin->pin.port, ppin->pin.pin);
         pin.mode = ppin->pin.mode;
-        pin.description = ppin->pin.description;
+        pin.description = ppin->pin.description == NULL ? xbar_group_to_description(ppin->pin.group) : ppin->pin.description;
 
         pin_info(&pin, data);
     } while(ppin = ppin->next);
@@ -1506,7 +1504,7 @@ static bool driver_setup (settings_t *settings)
     return IOInitDone;
 }
 
-#ifdef ENABLE_SPINDLE_LINEARIZATION
+#if DRIVER_SPINDLE_ENABLE && defined(ENABLE_SPINDLE_LINEARIZATION)
 static void driver_rt_report (stream_write_ptr stream_write, report_tracking_flags_t report)
 {
     if(report.pwm) {
@@ -1577,7 +1575,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "251015";
+    hal.driver_version = "251030";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1628,7 +1626,7 @@ bool driver_init (void)
     hal.nvs.type = NVS_None;
 #endif
 
-#ifdef ENABLE_SPINDLE_LINEARIZATION
+#if DRIVER_SPINDLE_ENABLE && defined(ENABLE_SPINDLE_LINEARIZATION)
     grbl.on_realtime_report = driver_rt_report;
 #endif
 

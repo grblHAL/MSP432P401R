@@ -75,6 +75,30 @@ static const io_stream_t *serial2Init (uint32_t baud_rate);
 static volatile uint8_t rts_state = 0;
 #endif
 
+static bool uart_release (uint8_t instance);
+static const io_stream_status_t *get_uart_status (uint8_t instance);
+
+static io_stream_status_t stream_status[] = {
+    {
+        .baud_rate = 115200,
+        .format = {
+            .width = Serial_8bit,
+            .stopbits = Serial_StopBits1,
+            .parity = Serial_ParityNone,
+        }
+    },
+#if SERIAL2_MOD
+    {
+        .baud_rate = 115200,
+        .format = {
+            .width = Serial_8bit,
+            .stopbits = Serial_StopBits1,
+            .parity = Serial_ParityNone,
+        }
+    },
+#endif
+};
+
 static io_stream_properties_t serial[] = {
     {
       .type = StreamType_Serial,
@@ -82,7 +106,9 @@ static io_stream_properties_t serial[] = {
       .flags.claimable = On,
       .flags.claimed = Off,
       .flags.can_set_baud = Off,
-      .claim = serialInit
+      .claim = serialInit,
+      .release = uart_release,
+      .get_status = get_uart_status
     },
 #ifdef SERIAL2_MOD
     {
@@ -92,7 +118,9 @@ static io_stream_properties_t serial[] = {
       .flags.claimed = Off,
       .flags.can_set_baud = On,
       .flags.modbus_ready = On,
-      .claim = serial2Init
+      .claim = serial2Init,
+      .release = uart_release,
+      .get_status = get_uart_status
     }
 #endif
 };
@@ -104,10 +132,67 @@ void serialRegisterStreams (void)
         .streams = serial,
     };
 
+    static const periph_pin_t tx = {
+        .function = Output_TX,
+        .group = PinGroup_UART,
+        .port = SERIAL0_PORT,
+        .pin = SERIAL0_TX_PIN,
+        .mode = { .mask = PINMODE_OUTPUT }
+    };
+
+    static const periph_pin_t rx = {
+        .function = Input_RX,
+        .group = PinGroup_UART,
+        .port = SERIAL0_PORT,
+        .pin = SERIAL0_RX_PIN,
+        .mode = { .mask = PINMODE_NONE }
+    };
+
+    hal.periph_port.register_pin(&rx);
+    hal.periph_port.register_pin(&tx);
+
+#ifdef SERIAL2_MOD
+
+    static const periph_pin_t tx2 = {
+        .function = Output_TX,
+        .group = PinGroup_UART2,
+        .port = SERIAL2_PORT,
+        .pin = SERIAL2_TX_PIN,
+        .mode = { .mask = PINMODE_OUTPUT }
+    };
+
+    static const periph_pin_t rx2 = {
+        .function = Input_RX,
+        .group = PinGroup_UART2,
+        .port = SERIAL2_PORT,
+        .pin = SERIAL2_RX_PIN,
+        .mode = { .mask = PINMODE_NONE }
+    };
+
+    hal.periph_port.register_pin(&rx2);
+    hal.periph_port.register_pin(&tx2);
+
+#endif
+
     stream_register_streams(&streams);
 }
 
-static int16_t serialGetC (void);
+static const io_stream_status_t *get_uart_status (uint8_t instance)
+{
+    stream_status[instance].flags = serial[instance].flags;
+
+    return &stream_status[instance];
+}
+
+static bool uart_release (uint8_t instance)
+{
+    bool ok;
+
+    if((ok = serial[instance].flags.claimed))
+        serial[instance].flags.claimed = Off;
+
+    return ok;
+}
 
 /*
 //
@@ -147,7 +232,7 @@ static uint16_t serialRxFree (void)
 static void serialRxFlush (void)
 {
     rxbuffer.head = rxbuffer.tail = 0;
-    hal.stream.read = serialGetC; // restore normal input
+//    hal.stream.read = serialGetC; // restore normal input
 
 #ifdef RTS_PORT
     BITBAND_PERI(RTS_PORT->OUT, RTS_PIN) = 0;
@@ -170,7 +255,7 @@ static void serialRxCancel (void)
 //
 // Attempt to send a character bypassing buffering
 //
-static inline bool serialPutCNonBlocking (const char c)
+static inline bool serialPutCNonBlocking (const uint8_t c)
 {
     bool ok;
 
@@ -183,7 +268,7 @@ static inline bool serialPutCNonBlocking (const char c)
 //
 // Writes a character to the serial output stream
 //
-static bool serialPutC (const char c) {
+static bool serialPutC (const uint8_t c) {
 
     uint32_t next_head;
 
@@ -211,7 +296,7 @@ static bool serialPutC (const char c) {
 //
 static void serialWriteS (const char *s)
 {
-    char c, *ptr = (char *)s;
+    uint8_t c, *ptr = (uint8_t *)s;
 
     while((c = *ptr++) != '\0')
         serialPutC(c);
@@ -242,7 +327,7 @@ static void serialWrite(const char *s, uint16_t length)
 //
 // serialGetC - returns -1 if no data available
 //
-static int16_t serialGetC (void)
+static int32_t serialGetC (void)
 {
     __disable_interrupts();
 
@@ -253,7 +338,7 @@ static int16_t serialGetC (void)
         return -1; // no data available else EOF
     }
 
-    char data = rxbuffer.data[bptr++];              // Get next character, increment tmp pointer
+    int32_t data = (int32_t)rxbuffer.data[bptr++];  // Get next character, increment tmp pointer
     rxbuffer.tail = bptr & (RX_BUFFER_SIZE - 1);    // and update pointer
     __enable_interrupts();
 
@@ -262,7 +347,7 @@ static int16_t serialGetC (void)
         BITBAND_PERI(RTS_PORT->OUT, RTS_PIN) = rts_state = 0;
 #endif
 
-    return (int16_t)data;
+    return data;
 }
 
 static bool serialSuspendInput (bool suspend)
@@ -277,7 +362,7 @@ static bool serialDisable (bool disable)
     return true;
 }
 
-static bool serialEnqueueRtCommand (char c)
+static bool serialEnqueueRtCommand (uint8_t c)
 {
     return enqueue_realtime_command(c);
 }
@@ -314,45 +399,31 @@ static const io_stream_t *serialInit (uint32_t baud_rate)
 
     serial[0].flags.claimed = On;
 
-    SERIAL0_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
-    SERIAL0_MODULE->BRW = 6;
-    SERIAL0_MODULE->MCTLW = (0x20 << 8) | (8 << 4) | 1;
-    SERIAL0_MODULE->IFG = ~EUSCI_A_IFG_RXIFG;
-    SERIAL0_MODULE->CTLW0 &= ~EUSCI_A_CTLW0_SWRST;
-    SERIAL0_MODULE->IE = EUSCI_A_IE_RXIE;
+    if(!serial[0].flags.init_ok) {
 
-    NVIC_SetPriority(SERIAL0_MODULE_INT, 3);
-    NVIC_EnableIRQ(SERIAL0_MODULE_INT);
+        SERIAL0_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
+        SERIAL0_MODULE->BRW = 6;
+        SERIAL0_MODULE->MCTLW = (0x20 << 8) | (8 << 4) | 1;
+        SERIAL0_MODULE->IFG = ~EUSCI_A_IFG_RXIFG;
+        SERIAL0_MODULE->CTLW0 &= ~EUSCI_A_CTLW0_SWRST;
+        SERIAL0_MODULE->IE = EUSCI_A_IE_RXIE;
 
-    SERIAL0_PORT->SEL0 = (1<<SERIAL0_RX_PIN)|(1<<SERIAL0_TX_PIN);    // set 2-UART pins as second function
+        NVIC_SetPriority(SERIAL0_MODULE_INT, 3);
+        NVIC_EnableIRQ(SERIAL0_MODULE_INT);
 
-    __enable_interrupts();
+        SERIAL0_PORT->SEL0 = (1<<SERIAL0_RX_PIN)|(1<<SERIAL0_TX_PIN);    // set 2-UART pins as second function
 
-#ifdef RTS_PORT
-    RTS_PORT->DIR |= RTS_BIT;
-    BITBAND_PERI(RTS_PORT->OUT, RTS_PIN) = 0;
-#endif
+        __enable_interrupts();
 
-    static const periph_pin_t tx = {
-        .function = Output_TX,
-        .group = PinGroup_UART,
-        .port = SERIAL0_PORT,
-        .pin = SERIAL0_TX_PIN,
-        .mode = { .mask = PINMODE_OUTPUT },
-        .description = "Primary UART"
-    };
+    #ifdef RTS_PORT
+        RTS_PORT->DIR |= RTS_BIT;
+        BITBAND_PERI(RTS_PORT->OUT, RTS_PIN) = 0;
+    #endif
 
-    static const periph_pin_t rx = {
-        .function = Input_RX,
-        .group = PinGroup_UART,
-        .port = SERIAL0_PORT,
-        .pin = SERIAL0_RX_PIN,
-        .mode = { .mask = PINMODE_NONE },
-        .description = "Primary UART"
-    };
+        serial[0].flags.init_ok = On;
+    }
 
-    hal.periph_port.register_pin(&rx);
-    hal.periph_port.register_pin(&tx);
+    serialDisable(false);
 
     return &stream;
 }
@@ -366,16 +437,16 @@ void SERIAL0_IRQHandler (void)
 
         case 0x04:
             bptr = txbuffer.tail;                           // Temp tail position (to avoid volatile overhead)
-            SERIAL0_MODULE->TXBUF = txbuffer.data[bptr++];   // Send a byte from the buffer
+            SERIAL0_MODULE->TXBUF = txbuffer.data[bptr++];  // Send a byte from the buffer
             bptr &= (TX_BUFFER_SIZE - 1);                   // and update
             txbuffer.tail = bptr;                           // tail position
             if (bptr == txbuffer.head)                      // Turn off TX interrupt
-                SERIAL0_MODULE->IE &= ~EUSCI_A_IE_TXIE;      // when buffer empty
+                SERIAL0_MODULE->IE &= ~EUSCI_A_IE_TXIE;     // when buffer empty
             break;
 
         case 0x02:;
-            uint16_t data = SERIAL0_MODULE->RXBUF;                   // Read character received
-            if(!enqueue_realtime_command((char)data)) {             // Enqueued as real-time command?
+            uint16_t data = SERIAL0_MODULE->RXBUF;                  // Read character received
+            if(!enqueue_realtime_command((uint8_t)data)) {          // Enqueued as real-time command?
                 bptr = (rxbuffer.head + 1) & (RX_BUFFER_SIZE - 1);  // Get next head pointer
                 if(bptr == rxbuffer.tail)                           // If buffer full
                     rxbuffer.overflow = 1;                          // flag overflow,
@@ -435,7 +506,7 @@ static void serial2RxCancel (void)
 //
 // Attempt to send a character bypassing buffering
 //
-static inline bool serial2PutCNonBlocking (const char c)
+static inline bool serial2PutCNonBlocking (const uint8_t c)
 {
     bool ok;
 
@@ -448,7 +519,7 @@ static inline bool serial2PutCNonBlocking (const char c)
 //
 // Writes a character to the serial output stream
 //
-static bool serial2PutC (const char c) {
+static bool serial2PutC (const uint8_t c) {
 
     uint32_t next_head;
 
@@ -474,7 +545,7 @@ static bool serial2PutC (const char c) {
 //
 static void serial2WriteS (const char *s)
 {
-    char c, *ptr = (char *)s;
+    uint8_t c, *ptr = (uint8_t *)s;
 
     while((c = *ptr++) != '\0')
         serial2PutC(c);
@@ -483,9 +554,9 @@ static void serial2WriteS (const char *s)
 //
 // Writes a number of characters from a buffer to the serial output stream, blocks if buffer full
 //
-static void serial2Write(const char *s, uint16_t length)
+static void serial2Write(const uint8_t *s, uint16_t length)
 {
-    char *ptr = (char *)s;
+    uint8_t *ptr = (uint8_t *)s;
 
     while(length--)
         serial2PutC(*ptr++);
@@ -513,17 +584,17 @@ static uint16_t serial2TxCount (void)
 //
 // serialGetC - returns -1 if no data available
 //
-static int16_t serial2GetC (void)
+static int32_t serial2GetC (void)
 {
     uint16_t bptr = rxbuffer2.tail;
 
     if(bptr == rxbuffer2.head)
         return -1; // no data available else EOF
 
-    char data = rxbuffer2.data[bptr++];             // Get next character, increment tmp pointer
+    int32_t data = (int32_t)rxbuffer2.data[bptr++];             // Get next character, increment tmp pointer
     rxbuffer2.tail = bptr & (RX_BUFFER_SIZE - 1);   // and update pointer
 
-    return (int16_t)data;
+    return data;
 }
 
 static bool serial2SetBaudRate (uint32_t baud_rate)
@@ -534,6 +605,8 @@ static bool serial2SetBaudRate (uint32_t baud_rate)
         serial2Init(baud_rate);
         init_ok = true;
     }
+
+    stream_status[1].baud_rate = baud_rate;
 
     switch(baud_rate)
     {
@@ -558,7 +631,7 @@ static bool serial2Disable (bool disable)
     return true;
 }
 
-static bool serial2EnqueueRtCommand (char c)
+static bool serial2EnqueueRtCommand (uint8_t c)
 {
     return enqueue_realtime_command2(c);
 }
@@ -602,53 +675,26 @@ static const io_stream_t *serial2Init (uint32_t baud_rate)
 
     serial[1].flags.claimed = On;
 
-    SERIAL2_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
+    if(!serial[1].flags.init_ok) {
 
-    switch(baud_rate)
-    {
-        case 19200:
-            SERIAL2_MODULE->BRW = 39;
-            SERIAL2_MODULE->MCTLW = (0x0 << 8) | (1 << 4) | 1;
-            break;
+        SERIAL2_MODULE->CTLW0 = EUSCI_A_CTLW0_SWRST|EUSCI_A_CTLW0_SSEL__SMCLK;
+        SERIAL2_MODULE->IFG = ~EUSCI_A_IFG_RXIFG;
+        SERIAL2_MODULE->CTLW0 &= ~EUSCI_A_CTLW0_SWRST;
 
-        default: // 115200
-            SERIAL2_MODULE->BRW = 6;
-            SERIAL2_MODULE->MCTLW = (0x20 << 8) | (8 << 4) | 1;
-            break;
-    }
+        NVIC_SetPriority(SERIAL2_MODULE_INT, 3);
+        NVIC_EnableIRQ(SERIAL2_MODULE_INT);
 
-    SERIAL2_MODULE->IFG = ~EUSCI_A_IFG_RXIFG;
-    SERIAL2_MODULE->CTLW0 &= ~EUSCI_A_CTLW0_SWRST;
-
-    NVIC_SetPriority(SERIAL2_MODULE_INT, 3);
-    NVIC_EnableIRQ(SERIAL2_MODULE_INT);
-
-    SERIAL2_PORT->SEL0 = (1<<SERIAL2_RX_PIN)|(1<<SERIAL2_TX_PIN);    // set 2-UART pins as second function
+        SERIAL2_PORT->SEL0 = (1<<SERIAL2_RX_PIN)|(1<<SERIAL2_TX_PIN);    // set 2-UART pins as second function
 
 #if MODBUS_ENABLE
-    SERIAL2_MODULE->IE = EUSCI_A_IE_RXIE;
+        SERIAL2_MODULE->IE = EUSCI_A_IE_RXIE;
 #endif
 
-    static const periph_pin_t tx = {
-        .function = Output_TX,
-        .group = PinGroup_UART2,
-        .port = SERIAL2_PORT,
-        .pin = SERIAL2_TX_PIN,
-        .mode = { .mask = PINMODE_OUTPUT },
-        .description = "Secondary UART"
-    };
+        serial[1].flags.init_ok = On;
+    }
 
-    static const periph_pin_t rx = {
-        .function = Input_RX,
-        .group = PinGroup_UART2,
-        .port = SERIAL2_PORT,
-        .pin = SERIAL2_RX_PIN,
-        .mode = { .mask = PINMODE_NONE },
-        .description = "Secondary UART"
-    };
-
-    hal.periph_port.register_pin(&rx);
-    hal.periph_port.register_pin(&tx);
+    serial2SetBaudRate(baud_rate);
+    serial2Disable(false);
 
     return &stream;
 }
