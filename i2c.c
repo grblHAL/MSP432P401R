@@ -3,7 +3,7 @@
 
   Part of grblHAL driver for MSP432P401R
 
-  Copyright (c) 2018-2025 Terje Io
+  Copyright (c) 2018-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -276,7 +276,7 @@ TMC_spi_status_t tmc_spi_write (trinamic_motor_t driver, TMC_spi_datagram_t *dat
 
     while(i2cIsBusy);
 
-    if(driver.axis != axis) {
+    if(driver.axis != axis && datagram->addr.idx != TMC_I2CReg_ENABLE) {
         i2c.buffer[0] = driver.axis | 0x80;
         i2c_send(I2C_ADR_I2CBRIDGE, NULL, 1, true);
 
