@@ -1175,7 +1175,7 @@ uint32_t getElapsedTicks (void)
 }
 
 // Configure perhipherals when settings are initialized or changed
-void settings_changed (settings_t *settings, settings_changed_flags_t changed)
+void on_settings_changed (settings_t *settings, settings_changed_flags_t changed)
 {
 #if USE_STEPDIR_MAP
     stepdirmap_init(settings);
@@ -1615,7 +1615,7 @@ static bool driver_setup (settings_t *settings)
 
     IOInitDone = settings->version.id == 23;
 
-    hal.settings_changed(settings, (settings_changed_flags_t){0});
+    grbl.on_settings_changed(settings, (settings_changed_flags_t){0});
 
     return IOInitDone;
 }
@@ -1703,7 +1703,7 @@ bool driver_init (void)
     hal.f_step_timer = SystemCoreClock;
     hal.rx_buffer_size = RX_BUFFER_SIZE;
     hal.delay_ms = driver_delay_ms;
-    hal.settings_changed = settings_changed;
+    grbl.on_settings_changed = on_settings_changed;
 
     hal.stepper.wake_up = stepperWakeUp;
     hal.stepper.go_idle = stepperGoIdle;
