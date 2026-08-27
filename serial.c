@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2017-2025 Terje Io
+  Copyright (c) 2017-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -454,7 +454,8 @@ void SERIAL0_IRQHandler (void)
                     rxbuffer.data[rxbuffer.head] = (char)data;      // else add data to buffer
                     rxbuffer.head = bptr;                           // and update pointer
                 }
-            }
+            } else if((uint8_t)data == CMD_STATUS_REPORT_LEGACY || (uint8_t)data == CMD_STATUS_REPORT)
+                stream_status[0].last_status_request = hal.get_elapsed_ticks();
         #ifdef RTS_PORT
             if (!rts_state && BUFCOUNT(rxbuffer.head, rxbuffer.tail, RX_BUFFER_SIZE) >= RX_BUFFER_HWM) // Set RTS if at or above HWM
                 BITBAND_PERI(RTS_PORT->OUT, RTS_PIN) = rts_state = 1;
@@ -716,7 +717,7 @@ void SERIAL2_IRQHandler (void)
 
         case 0x02:
             data = SERIAL2_MODULE->RXBUF;                           // Read character received
-            if(!enqueue_realtime_command2((char)data)) {            // Enqueued as real-time command?
+            if(!enqueue_realtime_command2((uint8_t)data)) {         // Enqueued as real-time command?
                 bptr = (rxbuffer2.head + 1) & (RX_BUFFER_SIZE - 1); // Temp head position (to avoid volatile overhead)
                 if(bptr == rxbuffer2.tail)                          // If buffer full
                     rxbuffer2.overflow = 1;                         // flag overflow
@@ -724,7 +725,8 @@ void SERIAL2_IRQHandler (void)
                     rxbuffer2.data[rxbuffer2.head] = data;          // else data to buffer
                     rxbuffer2.head = bptr;                          // and update pointer
                 }
-            }
+            } else if((uint8_t)data == CMD_STATUS_REPORT_LEGACY || (uint8_t)data == CMD_STATUS_REPORT)
+                stream_status[1].last_status_request = hal.get_elapsed_ticks();
             break;
     }
 }
