@@ -330,7 +330,7 @@ static void driver_delay_ms (uint32_t ms, void (*callback)(void))
     if((delay.ms = ms) > 0) {
         if(!(delay.callback = callback)) {
             while(delay.ms)
-                grbl.on_execute_delay(state_get());
+                task_execute(true);
         }
     } else if(callback)
         callback();
@@ -1691,7 +1691,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "260122";
+    hal.driver_version = "261003";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
