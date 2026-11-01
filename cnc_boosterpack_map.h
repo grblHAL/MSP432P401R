@@ -45,6 +45,8 @@
 #undef I2C_ENABLE
 #undef EEPROM_ENABLE
 
+#define PULLUPS_ENABLE   0
+
 #define CNC_BOOSTERPACK  1 // Do not change!
 #define I2C_ENABLE       1 // Only change if BoosterPack does not have EEPROM mounted
 #define EEPROM_ENABLE    1 // Only change if BoosterPack does not have EEPROM mounted

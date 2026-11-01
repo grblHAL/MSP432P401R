@@ -1708,7 +1708,7 @@ bool driver_init (void)
 #endif
 
     hal.info = "MSP432";
-    hal.driver_version = "261007";
+    hal.driver_version = "261029";
     hal.driver_url = GRBL_URL "/MSP432P401R";
 #ifdef BOARD_NAME
     hal.board = BOARD_NAME;
@@ -1835,8 +1835,7 @@ bool driver_init (void)
     hal.coolant_cap.bits = COOLANT_ENABLE;
     hal.driver_cap.software_debounce = On;
     hal.driver_cap.step_pulse_delay = On;
-    hal.driver_cap.control_pull_up = On;
-    hal.driver_cap.limits_pull_up = On;
+    hal.driver_cap.pullup_enabled = PULLUPS_ENABLE;
 
     static pin_group_pins_t aux_inputs = {0}, aux_outputs = {0}, aux_ainputs = {0}, aux_aoutputs = {0};
 
